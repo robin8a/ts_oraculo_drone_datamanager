@@ -1,0 +1,11 @@
+[
+  {
+    "username": "username",
+    "password": "password",
+    "project_ids": [
+      "project_id_1",
+      "project_id_2",
+      "project_id_3"
+    ]
+  }
+]
