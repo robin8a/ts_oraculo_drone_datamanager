@@ -9,7 +9,10 @@ export function SettingsPage() {
   useEffect(() => {
     loadAWSConfig()
       .then(setConfig)
-      .catch(console.error)
+      .catch((err) => {
+        console.error('Failed to load AWS config:', err);
+        alert(`Failed to load configuration: ${err.message || 'Unknown error'}`);
+      })
       .finally(() => setLoading(false));
   }, []);
 

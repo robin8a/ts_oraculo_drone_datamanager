@@ -34,7 +34,12 @@ export function FileManagerPage() {
   const [selectedItem, setSelectedItem] = useState<{ key: string; name: string; isFolder: boolean } | null>(null);
 
   useEffect(() => {
-    loadAWSConfig().then(setAwsConfig).catch(console.error);
+    loadAWSConfig()
+      .then(setAwsConfig)
+      .catch((err) => {
+        console.error('Failed to load AWS config:', err);
+        setError(err.message || 'Failed to load AWS configuration. Please check config.json file.');
+      });
   }, []);
 
   useEffect(() => {
@@ -50,11 +55,18 @@ export function FileManagerPage() {
     setError('');
 
     try {
-      const prefix = `${selectedProject}/${currentPath}`;
+      // Build prefix: project_id_1/ or project_id_1/subfolder/
+      const prefix = currentPath 
+        ? `${selectedProject}/${currentPath}${currentPath.endsWith('/') ? '' : '/'}`
+        : `${selectedProject}/`;
+      
+      console.log('Loading files with prefix:', prefix);
       const objects = await listObjects(awsConfig, prefix);
+      console.log('Loaded objects:', objects.length, objects);
       setFiles(objects);
     } catch (err: any) {
-      setError(err.message || 'Failed to load files');
+      console.error('Error loading files:', err);
+      setError(err.message || 'Failed to load files. Please check your AWS credentials and bucket configuration.');
     } finally {
       setLoading(false);
     }

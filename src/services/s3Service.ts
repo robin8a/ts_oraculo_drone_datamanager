@@ -22,9 +22,13 @@ export async function listObjects(
   prefix: string
 ): Promise<S3Object[]> {
   const client = getS3Client(config);
+  
+  // Ensure prefix ends with / for proper listing
+  const normalizedPrefix = prefix.endsWith('/') ? prefix : `${prefix}/`;
+  
   const command = new ListObjectsV2Command({
     Bucket: config.bucket,
-    Prefix: prefix,
+    Prefix: normalizedPrefix,
     Delimiter: '/',
   });
 
@@ -36,14 +40,16 @@ export async function listObjects(
     if (response.CommonPrefixes) {
       for (const commonPrefix of response.CommonPrefixes) {
         if (commonPrefix.Prefix) {
-          const name = commonPrefix.Prefix.replace(prefix, '').replace('/', '');
-          objects.push({
-            key: commonPrefix.Prefix,
-            name,
-            size: 0,
-            lastModified: new Date(),
-            isFolder: true,
-          });
+          const name = commonPrefix.Prefix.replace(normalizedPrefix, '').replace('/', '');
+          if (name) { // Only add if name is not empty
+            objects.push({
+              key: commonPrefix.Prefix,
+              name,
+              size: 0,
+              lastModified: new Date(),
+              isFolder: true,
+            });
+          }
         }
       }
     }
@@ -51,23 +57,27 @@ export async function listObjects(
     // Add files
     if (response.Contents) {
       for (const object of response.Contents) {
-        if (object.Key && object.Key !== prefix) {
-          const name = object.Key.replace(prefix, '');
-          objects.push({
-            key: object.Key,
-            name,
-            size: object.Size || 0,
-            lastModified: object.LastModified || new Date(),
-            isFolder: false,
-          });
+        if (object.Key && object.Key !== normalizedPrefix) {
+          const name = object.Key.replace(normalizedPrefix, '');
+          // Only add files (not folder markers)
+          if (name && !name.endsWith('/')) {
+            objects.push({
+              key: object.Key,
+              name,
+              size: object.Size || 0,
+              lastModified: object.LastModified || new Date(),
+              isFolder: false,
+            });
+          }
         }
       }
     }
 
     return objects;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error listing objects:', error);
-    throw error;
+    const errorMessage = error.message || 'Failed to list objects from S3';
+    throw new Error(errorMessage);
   }
 }
 

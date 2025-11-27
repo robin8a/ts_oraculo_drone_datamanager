@@ -5,13 +5,14 @@ export async function loadAWSConfig(): Promise<AWSConfig> {
   try {
     const response = await fetch('/config.json');
     if (!response.ok) {
-      throw new Error('Failed to load config.json');
+      throw new Error(`Failed to load config.json: ${response.status} ${response.statusText}`);
     }
     const config: AWSConfig = await response.json();
     return config;
-  } catch (error) {
+  } catch (error: any) {
+    const errorMessage = error.message || 'Failed to load config.json. Make sure the file exists in the public folder.';
     console.error('Error loading AWS config:', error);
-    throw error;
+    throw new Error(errorMessage);
   }
 }
 
@@ -19,13 +20,14 @@ export async function loadUsersAuth(): Promise<UserAuth[]> {
   try {
     const response = await fetch('/users_auth.json');
     if (!response.ok) {
-      throw new Error('Failed to load users_auth.json');
+      throw new Error(`Failed to load users_auth.json: ${response.status} ${response.statusText}`);
     }
     const users: UserAuth[] = await response.json();
     return users;
-  } catch (error) {
+  } catch (error: any) {
+    const errorMessage = error.message || 'Failed to load users_auth.json. Make sure the file exists in the public folder.';
     console.error('Error loading users auth:', error);
-    throw error;
+    throw new Error(errorMessage);
   }
 }
 
