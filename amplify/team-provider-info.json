@@ -1,0 +1,15 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-tsoraculodronedatama-dev-1d195-authRole",
+      "UnauthRoleArn": "arn:aws:iam::879381245127:role/amplify-tsoraculodronedatama-dev-1d195-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::879381245127:role/amplify-tsoraculodronedatama-dev-1d195-authRole",
+      "Region": "us-east-1",
+      "DeploymentBucketName": "amplify-tsoraculodronedatama-dev-1d195-deployment",
+      "UnauthRoleName": "amplify-tsoraculodronedatama-dev-1d195-unauthRole",
+      "StackName": "amplify-tsoraculodronedatama-dev-1d195",
+      "StackId": "arn:aws:cloudformation:us-east-1:879381245127:stack/amplify-tsoraculodronedatama-dev-1d195/2d38fac0-dfbc-11f0-9f84-0e59111daf25",
+      "AmplifyAppId": "d2yaf6u7gkp21"
+    }
+  }
+}
