@@ -6,42 +6,51 @@ export function Sidebar() {
   const { logout } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
+  const getNavClassName = (path: string) =>
+    `block rounded-2xl px-4 py-3 text-sm font-medium transition ${
+      isActive(path)
+        ? 'bg-terra-sand text-terra-deep shadow-soft'
+        : 'text-white/80 hover:bg-white/10 hover:text-white'
+    }`;
 
   return (
-    <aside className="w-64 bg-gray-800 text-white min-h-screen p-4">
-      <h2 className="text-xl font-bold mb-6">Menu</h2>
+    <aside className="hidden min-h-full w-72 border-r border-terra-moss/15 bg-terra-deep/95 px-5 py-6 text-white lg:block">
+      <div className="mb-8 border-b border-white/10 pb-6">
+        <p className="text-xs uppercase tracking-[0.28em] text-terra-sand/80">Navegación</p>
+        <h2 className="mt-3 font-display text-2xl font-bold tracking-wide text-terra-sand">
+          Terrasacha
+        </h2>
+        <p className="mt-2 text-sm text-white/65">
+          Plataforma documental inspirada en sostenibilidad, innovación y claridad.
+        </p>
+      </div>
       <nav className="space-y-2">
-        <Link
-          to="/home"
-          className={`block px-4 py-2 rounded ${
-            isActive('/home') ? 'bg-gray-700' : 'hover:bg-gray-700'
-          }`}
-        >
-          Home
+        <Link to="/home" className={getNavClassName('/home')}>
+          Inicio
         </Link>
-        <Link
-          to="/projects"
-          className={`block px-4 py-2 rounded ${
-            isActive('/projects') ? 'bg-gray-700' : 'hover:bg-gray-700'
-          }`}
-        >
-          Projects
+        <Link to="/projects" className={getNavClassName('/projects')}>
+          Proyectos
         </Link>
-        <Link
-          to="/settings"
-          className={`block px-4 py-2 rounded ${
-            isActive('/settings') ? 'bg-gray-700' : 'hover:bg-gray-700'
-          }`}
-        >
-          Settings
+        <Link to="/files" className={getNavClassName('/files')}>
+          Archivos
         </Link>
-        <button
-          onClick={logout}
-          className="w-full text-left px-4 py-2 rounded hover:bg-gray-700"
-        >
-          Logout
-        </button>
+        <Link to="/settings" className={getNavClassName('/settings')}>
+          Configuración
+        </Link>
       </nav>
+      <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <p className="text-xs uppercase tracking-[0.24em] text-terra-sand/80">Esencia</p>
+        <p className="mt-2 text-sm leading-6 text-white/75">
+          Innovación, conciencia y transformación con una presencia visual ecológica y tecnológica.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => void logout()}
+        className="mt-6 w-full rounded-2xl border border-white/10 px-4 py-3 text-left text-sm font-medium text-white/85 transition hover:bg-white/10 hover:text-white"
+      >
+        Cerrar sesión
+      </button>
     </aside>
   );
 }

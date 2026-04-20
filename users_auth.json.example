@@ -7,6 +7,12 @@
       "project_id_2",
       "project_id_3"
     ]
+  },
+  {
+    "username": "usuario_contrasena_temporal",
+    "password": "ContraseñaGenerada123",
+    "generated_password": true,
+    "project_ids": ["project_id_1"]
   }
 ]
 

@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 
 # Config files
+.env
 config.json
 public/config.json
 public/users_auth.json

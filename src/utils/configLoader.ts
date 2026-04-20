@@ -1,44 +1,30 @@
 import type { AWSConfig } from '../types/config';
-import type { UserAuth } from '../types/config';
 
-export async function loadAWSConfig(): Promise<AWSConfig> {
+const trimEnv = (value: string | undefined): string =>
+  typeof value === 'string' ? value.trim() : '';
+
+const readAwsConfigFromEnv = (): AWSConfig => {
+  const bucket = trimEnv(import.meta.env.VITE_S3_BUCKET);
+  const accessKey = trimEnv(import.meta.env.VITE_AWS_ACCESS_KEY_ID);
+  const secretKey = trimEnv(import.meta.env.VITE_AWS_SECRET_ACCESS_KEY);
+
+  if (!bucket || !accessKey || !secretKey) {
+    throw new Error(
+      'Faltan o están vacías VITE_S3_BUCKET, VITE_AWS_ACCESS_KEY_ID o VITE_AWS_SECRET_ACCESS_KEY. Copia .env.example a .env, completa los valores y reinicia el servidor de desarrollo.'
+    );
+  }
+
+  return { bucket, accessKey, secretKey };
+};
+
+export const loadAWSConfig = async (): Promise<AWSConfig> => {
   try {
-    const response = await fetch('/config.json');
-    if (!response.ok) {
-      throw new Error(`Failed to load config.json: ${response.status} ${response.statusText}`);
-    }
-    const config: AWSConfig = await response.json();
-    return config;
-  } catch (error: any) {
-    const errorMessage = error.message || 'Failed to load config.json. Make sure the file exists in the public folder.';
-    console.error('Error loading AWS config:', error);
+    return readAwsConfigFromEnv();
+  } catch (error: unknown) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : 'Error al leer la configuración S3 desde variables de entorno.';
     throw new Error(errorMessage);
   }
-}
-
-export async function loadUsersAuth(): Promise<UserAuth[]> {
-  try {
-    const response = await fetch('/users_auth.json');
-    if (!response.ok) {
-      throw new Error(`Failed to load users_auth.json: ${response.status} ${response.statusText}`);
-    }
-    const users: UserAuth[] = await response.json();
-    return users;
-  } catch (error: any) {
-    const errorMessage = error.message || 'Failed to load users_auth.json. Make sure the file exists in the public folder.';
-    console.error('Error loading users auth:', error);
-    throw new Error(errorMessage);
-  }
-}
-
-export async function authenticateUser(
-  username: string,
-  password: string
-): Promise<UserAuth | null> {
-  const users = await loadUsersAuth();
-  const user = users.find(
-    (u) => u.username === username && u.password === password
-  );
-  return user || null;
-}
-
+};

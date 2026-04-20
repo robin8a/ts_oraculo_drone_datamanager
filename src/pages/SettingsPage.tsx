@@ -10,59 +10,66 @@ export function SettingsPage() {
     loadAWSConfig()
       .then(setConfig)
       .catch((err) => {
-        console.error('Failed to load AWS config:', err);
         alert(`Failed to load configuration: ${err.message || 'Unknown error'}`);
       })
       .finally(() => setLoading(false));
   }, []);
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">Settings</h1>
-      <div className="bg-white p-6 rounded-lg shadow">
+    <div className="space-y-6">
+      <section>
+        <p className="brand-kicker">Configuración</p>
+        <h1 className="brand-page-title mt-3">Ajustes del entorno</h1>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-terra-deep/75">
+          Consulta la configuración activa del acceso a S3 dentro de una presentación más consistente con la identidad Terrasacha.
+        </p>
+      </section>
+      <div className="brand-card p-6 md:p-8">
         {loading ? (
-          <p>Loading settings...</p>
+          <p className="text-terra-deep/70">Cargando configuración...</p>
         ) : config ? (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="brand-label">
                 S3 Bucket
               </label>
               <input
                 type="text"
                 value={config.bucket}
                 disabled
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
+                className="brand-input cursor-not-allowed bg-terra-cream/75 text-terra-deep/75"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="brand-label">
                 AWS Access Key
               </label>
               <input
                 type="text"
                 value={config.accessKey}
                 disabled
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
+                className="brand-input cursor-not-allowed bg-terra-cream/75 text-terra-deep/75"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="brand-label">
                 AWS Secret Key
               </label>
               <input
                 type="password"
                 value="••••••••"
                 disabled
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100"
+                className="brand-input cursor-not-allowed bg-terra-cream/75 text-terra-deep/75"
               />
             </div>
-            <p className="text-sm text-gray-600 mt-4">
-              Configuration is loaded from config.json. To modify settings, edit the config.json file.
+            <p className="rounded-2xl border border-terra-moss/25 bg-terra-cream/70 px-4 py-3 text-sm text-terra-deep/75">
+              Estos valores vienen de variables <code className="text-xs">VITE_*</code> en <code className="text-xs">.env</code>{' '}
+              (claves estáticas en el bundle de cliente). En <strong className="font-medium">Archivos</strong> la app usa en cambio
+              S3 con credenciales temporales de tu sesión Cognito (Identity Pool + bucket de Amplify).
             </p>
           </div>
         ) : (
-          <p className="text-red-600">Failed to load configuration</p>
+          <p className="text-red-600">No se pudo cargar la configuración</p>
         )}
       </div>
     </div>

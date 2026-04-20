@@ -1,6 +1,5 @@
 {
   "bucket": "your-s3-bucket-name",
-  "accessKey": "your-aws-access-key",
-  "secretKey": "your-aws-secret-key"
+  "accessKey": "your-aws-access-key-id",
+  "secretKey": "your-aws-secret-access-key"
 }
-

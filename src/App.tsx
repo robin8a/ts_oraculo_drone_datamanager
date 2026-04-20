@@ -1,9 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
 import { ProjectProvider } from './contexts/ProjectContext';
 import { ClipboardProvider } from './contexts/ClipboardContext';
+import { ProtectedRoute, GuestRoute } from './components/ProtectedRoute';
 import { MainLayout } from './components/Layout/MainLayout';
-import { ProtectedRoute } from './components/ProtectedRoute';
 import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { ProjectsPage } from './pages/ProjectsPage';
@@ -12,12 +11,18 @@ import { SettingsPage } from './pages/SettingsPage';
 
 function App() {
   return (
-    <AuthProvider>
-      <ProjectProvider>
-        <ClipboardProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
+    <ProjectProvider>
+      <ClipboardProvider>
+        <BrowserRouter>
+          <Routes>
+              <Route
+                path="/login"
+                element={
+                  <GuestRoute>
+                    <LoginPage />
+                  </GuestRoute>
+                }
+              />
               <Route
                 path="/"
                 element={
@@ -68,11 +73,11 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-            </Routes>
-          </BrowserRouter>
-        </ClipboardProvider>
-      </ProjectProvider>
-    </AuthProvider>
+              <Route path="*" element={<Navigate to="/home" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </ClipboardProvider>
+    </ProjectProvider>
   );
 }
 

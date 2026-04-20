@@ -50,39 +50,40 @@ export function RenameModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">
-          Rename {isFolder ? 'Folder' : 'File'}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-terra-deep/70 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[1.5rem] border border-terra-moss/25 bg-white p-6 shadow-brand">
+        <p className="brand-kicker">{isFolder ? 'Carpeta' : 'Archivo'}</p>
+        <h2 className="mt-2 text-2xl font-semibold text-terra-deep">
+          Renombrar {isFolder ? 'carpeta' : 'archivo'}
         </h2>
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              New Name
+            <label className="brand-label">
+              Nuevo nombre
             </label>
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="brand-input"
               autoFocus
             />
           </div>
-          {error && <div className="text-red-600 text-sm mb-4">{error}</div>}
+          {error && <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
           <div className="flex justify-end space-x-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+              className="brand-button-secondary"
             >
-              Cancel
+              Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400"
+              className="brand-button-primary"
             >
-              {loading ? 'Renaming...' : 'Rename'}
+              {loading ? 'Renombrando...' : 'Guardar'}
             </button>
           </div>
         </form>

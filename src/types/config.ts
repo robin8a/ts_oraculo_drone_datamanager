@@ -3,10 +3,3 @@ export interface AWSConfig {
   accessKey: string;
   secretKey: string;
 }
-
-export interface UserAuth {
-  username: string;
-  password: string;
-  project_ids: string[];
-}
-

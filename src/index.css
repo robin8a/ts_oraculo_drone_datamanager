@@ -2,15 +2,180 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  :root {
+    color: #252814;
+    background:
+      radial-gradient(circle at top right, rgba(177, 193, 129, 0.2), transparent 32%),
+      linear-gradient(180deg, #f8f4e8 0%, #eef1de 100%);
+    font-family: Typographica, Futura, "Avenir Next", "Segoe UI", sans-serif;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: #252814;
+    background: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  ::selection {
+    background: rgba(132, 155, 80, 0.28);
+    color: #252814;
+  }
 }
 
 #root {
   min-height: 100vh;
+}
+
+@layer components {
+  .brand-card {
+    border-radius: 1.25rem;
+    border: 1px solid rgba(177, 193, 129, 0.35);
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 18px 40px -24px rgba(68, 72, 44, 0.28);
+    backdrop-filter: blur(4px);
+  }
+
+  .brand-panel {
+    border-radius: 1.25rem;
+    border: 1px solid rgba(177, 193, 129, 0.3);
+    background: rgba(248, 244, 232, 0.85);
+    box-shadow: 0 18px 40px -24px rgba(68, 72, 44, 0.28);
+    backdrop-filter: blur(4px);
+  }
+
+  .brand-button-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    background: #6e6c35;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    color: #fff;
+    transition: background-color 150ms ease, opacity 150ms ease, transform 150ms ease;
+  }
+
+  .brand-button-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(110, 108, 53, 0.2);
+    border-radius: 0.75rem;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    color: #44482c;
+    transition: background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+  }
+
+  .brand-button-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    color: #44482c;
+    transition: background-color 150ms ease, opacity 150ms ease;
+  }
+
+  .brand-input {
+    width: 100%;
+    border: 1px solid rgba(177, 193, 129, 0.5);
+    border-radius: 0.75rem;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 0.5rem 0.75rem;
+    color: #252814;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    outline: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+  }
+
+  .brand-label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #44482c;
+  }
+
+  .brand-page-title {
+    font-family: "Champagne & Limousines Bold", Typographica, Futura, sans-serif;
+    font-size: 1.875rem;
+    font-weight: 700;
+    letter-spacing: 0.025em;
+    color: #44482c;
+  }
+
+  .brand-kicker {
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: #6e6c35;
+  }
+
+  .brand-muted {
+    font-size: 0.875rem;
+    color: rgba(68, 72, 44, 0.75);
+  }
+
+  .brand-button-primary:hover {
+    background: #44482c;
+  }
+
+  .brand-button-primary:focus-visible,
+  .brand-button-secondary:focus-visible,
+  .brand-button-ghost:focus-visible,
+  .brand-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(177, 193, 129, 0.55);
+  }
+
+  .brand-button-primary:disabled {
+    cursor: not-allowed;
+    background: #b1c181;
+  }
+
+  .brand-button-secondary:hover,
+  .brand-button-ghost:hover {
+    background: rgba(232, 215, 154, 0.35);
+  }
+
+  .brand-button-secondary:hover {
+    border-color: rgba(110, 108, 53, 0.4);
+  }
+
+  .brand-input::placeholder {
+    color: rgba(68, 72, 44, 0.45);
+  }
+
+  .brand-input:focus {
+    border-color: #6e6c35;
+  }
+}
+
+@media (min-width: 768px) {
+  .brand-page-title {
+    font-size: 2.25rem;
+  }
 }

@@ -9,18 +9,11 @@ A React + TypeScript + Tailwind CSS web application for managing files in AWS S3
 npm install
 ```
 
-2. Create configuration files in the `public/` folder (see `public/config.json.example` and `public/users_auth.json.example` for templates):
+2. Environment and `public/` configuration:
 
-   - `public/config.json` - AWS S3 configuration:
-   ```json
-   {
-     "bucket": "your-s3-bucket-name",
-     "accessKey": "your-aws-access-key",
-     "secretKey": "your-aws-secret-key"
-   }
-   ```
+   - Copy `.env.example` to `.env` and set `VITE_S3_BUCKET`, `VITE_AWS_ACCESS_KEY_ID`, and `VITE_AWS_SECRET_ACCESS_KEY` (used by the Settings page and any code calling `loadAWSConfig`). Restart the dev server after changes.
 
-   - `public/users_auth.json` - User authentication (array format):
+   - `public/users_auth.json` - User authentication (array format); see `public/users_auth.json.example`:
    ```json
    [
      {

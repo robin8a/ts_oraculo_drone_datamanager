@@ -5,22 +5,35 @@ export function Header() {
   const { user, logout } = useAuth();
 
   return (
-    <header className="bg-gray-900 text-white p-4 shadow-md">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center space-x-4">
-          <Link to="/home" className="text-xl font-bold hover:text-gray-300">
-            Home
+    <header className="border-b border-terra-moss/20 bg-terra-deep text-white shadow-brand">
+      <div className="flex w-full items-center justify-between px-[10px] py-4">
+        <div className="flex items-center gap-4">
+          <Link to="/home" className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10 text-sm font-bold text-terra-sand">
+              TS
+            </div>
+            <div>
+              <p className="font-display text-lg font-bold tracking-wide text-terra-sand">
+                Terrasacha
+              </p>
+              <p className="text-xs uppercase tracking-[0.28em] text-white/70">
+                Pioneros del Mañana
+              </p>
+            </div>
           </Link>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center gap-4">
           {user && (
-            <span className="text-sm text-gray-300">Welcome, {user.username}</span>
+            <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm text-white/80">
+              Bienvenido, {user.username}
+            </span>
           )}
           <button
-            onClick={logout}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded"
+            type="button"
+            onClick={() => void logout()}
+            className="brand-button-secondary border-white/15 bg-white/10 px-4 py-2 text-white hover:bg-white/20"
           >
-            Logout
+            Cerrar sesión
           </button>
         </div>
       </div>

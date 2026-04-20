@@ -6,8 +6,10 @@ import {
   CopyObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { AWSConfig } from '../types/config';
-import { getS3Client } from '../utils/s3Client';
+import type { S3Connection } from '../types/s3';
+
+export type { S3Connection } from '../types/s3';
+export { s3ConnectionFromAwsConfig } from '../utils/s3Client';
 
 export interface S3Object {
   key: string;
@@ -17,31 +19,25 @@ export interface S3Object {
   isFolder: boolean;
 }
 
-export async function listObjects(
-  config: AWSConfig,
-  prefix: string
-): Promise<S3Object[]> {
-  const client = getS3Client(config);
-  
-  // Ensure prefix ends with / for proper listing
+export async function listObjects(conn: S3Connection, prefix: string): Promise<S3Object[]> {
   const normalizedPrefix = prefix.endsWith('/') ? prefix : `${prefix}/`;
-  
+
   const command = new ListObjectsV2Command({
-    Bucket: config.bucket,
+    Bucket: conn.bucket,
     Prefix: normalizedPrefix,
     Delimiter: '/',
   });
 
   try {
-    const response = await client.send(command);
+    const response = await conn.client.send(command);
+
     const objects: S3Object[] = [];
 
-    // Add folders (CommonPrefixes)
     if (response.CommonPrefixes) {
       for (const commonPrefix of response.CommonPrefixes) {
         if (commonPrefix.Prefix) {
           const name = commonPrefix.Prefix.replace(normalizedPrefix, '').replace('/', '');
-          if (name) { // Only add if name is not empty
+          if (name) {
             objects.push({
               key: commonPrefix.Prefix,
               name,
@@ -54,12 +50,10 @@ export async function listObjects(
       }
     }
 
-    // Add files
     if (response.Contents) {
       for (const object of response.Contents) {
         if (object.Key && object.Key !== normalizedPrefix) {
           const name = object.Key.replace(normalizedPrefix, '');
-          // Only add files (not folder markers)
           if (name && !name.endsWith('/')) {
             objects.push({
               key: object.Key,
@@ -74,184 +68,125 @@ export async function listObjects(
     }
 
     return objects;
-  } catch (error: any) {
-    console.error('Error listing objects:', error);
-    const errorMessage = error.message || 'Failed to list objects from S3';
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to list objects from S3';
     throw new Error(errorMessage);
   }
 }
 
-export async function uploadFile(
-  config: AWSConfig,
-  key: string,
-  file: File
-): Promise<void> {
-  const client = getS3Client(config);
+export async function uploadFile(conn: S3Connection, key: string, file: File): Promise<void> {
   const arrayBuffer = await file.arrayBuffer();
   const uint8Array = new Uint8Array(arrayBuffer);
 
   const command = new PutObjectCommand({
-    Bucket: config.bucket,
+    Bucket: conn.bucket,
     Key: key,
     Body: uint8Array,
     ContentType: file.type,
   });
 
-  try {
-    await client.send(command);
-  } catch (error) {
-    console.error('Error uploading file:', error);
-    throw error;
-  }
+  await conn.client.send(command);
 }
 
-export async function downloadFile(
-  config: AWSConfig,
-  key: string
-): Promise<string> {
-  const client = getS3Client(config);
+export async function downloadFile(conn: S3Connection, key: string): Promise<string> {
   const command = new GetObjectCommand({
-    Bucket: config.bucket,
+    Bucket: conn.bucket,
     Key: key,
   });
 
-  try {
-    const url = await getSignedUrl(client, command, { expiresIn: 3600 });
-    return url;
-  } catch (error) {
-    console.error('Error generating download URL:', error);
-    throw error;
-  }
+  return getSignedUrl(conn.client, command, { expiresIn: 3600 });
 }
 
-export async function deleteFile(
-  config: AWSConfig,
-  key: string
-): Promise<void> {
-  const client = getS3Client(config);
+export async function getImageUrl(conn: S3Connection, key: string): Promise<string> {
+  const command = new GetObjectCommand({
+    Bucket: conn.bucket,
+    Key: key,
+  });
+
+  return getSignedUrl(conn.client, command, { expiresIn: 3600 });
+}
+
+export const isImageFile = (filename: string): boolean => {
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.tiff', '.tif'];
+  const lowerFilename = filename.toLowerCase();
+  return imageExtensions.some((ext) => lowerFilename.endsWith(ext));
+};
+
+export async function deleteFile(conn: S3Connection, key: string): Promise<void> {
   const command = new DeleteObjectCommand({
-    Bucket: config.bucket,
+    Bucket: conn.bucket,
     Key: key,
   });
 
-  try {
-    await client.send(command);
-  } catch (error) {
-    console.error('Error deleting file:', error);
-    throw error;
-  }
+  await conn.client.send(command);
 }
 
-export async function deleteFolder(
-  config: AWSConfig,
-  prefix: string
-): Promise<void> {
-  // List all objects with this prefix
-  const objects = await listObjects(config, prefix);
-  
-  // Delete all objects in the folder
+export async function deleteFolder(conn: S3Connection, prefix: string): Promise<void> {
+  const objects = await listObjects(conn, prefix);
+
   for (const obj of objects) {
     if (!obj.isFolder) {
-      await deleteFile(config, obj.key);
+      await deleteFile(conn, obj.key);
     } else {
-      // Recursively delete subfolders
-      await deleteFolder(config, obj.key);
+      await deleteFolder(conn, obj.key);
     }
   }
-  
-  // Delete the folder marker if it exists
+
   try {
-    await deleteFile(config, prefix);
-  } catch (error) {
-    // Folder marker might not exist, which is fine
+    await deleteFile(conn, prefix);
+  } catch {
+    // Folder marker might not exist
   }
 }
 
-export async function copyFile(
-  config: AWSConfig,
-  sourceKey: string,
-  destinationKey: string
-): Promise<void> {
-  const client = getS3Client(config);
+export async function copyFile(conn: S3Connection, sourceKey: string, destinationKey: string): Promise<void> {
   const command = new CopyObjectCommand({
-    Bucket: config.bucket,
-    CopySource: `${config.bucket}/${sourceKey}`,
+    Bucket: conn.bucket,
+    CopySource: `${conn.bucket}/${sourceKey}`,
     Key: destinationKey,
   });
 
-  try {
-    await client.send(command);
-  } catch (error) {
-    console.error('Error copying file:', error);
-    throw error;
-  }
+  await conn.client.send(command);
 }
 
-export async function moveFile(
-  config: AWSConfig,
-  sourceKey: string,
-  destinationKey: string
-): Promise<void> {
-  await copyFile(config, sourceKey, destinationKey);
-  await deleteFile(config, sourceKey);
+export async function moveFile(conn: S3Connection, sourceKey: string, destinationKey: string): Promise<void> {
+  await copyFile(conn, sourceKey, destinationKey);
+  await deleteFile(conn, sourceKey);
 }
 
-export async function renameFile(
-  config: AWSConfig,
-  oldKey: string,
-  newKey: string
-): Promise<void> {
-  await moveFile(config, oldKey, newKey);
+export async function renameFile(conn: S3Connection, oldKey: string, newKey: string): Promise<void> {
+  await moveFile(conn, oldKey, newKey);
 }
 
-export async function createFolder(
-  config: AWSConfig,
-  key: string
-): Promise<void> {
-  const client = getS3Client(config);
-  // Ensure the key ends with a slash
+export async function createFolder(conn: S3Connection, key: string): Promise<void> {
   const folderKey = key.endsWith('/') ? key : `${key}/`;
-  
+
   const command = new PutObjectCommand({
-    Bucket: config.bucket,
+    Bucket: conn.bucket,
     Key: folderKey,
     Body: '',
   });
 
-  try {
-    await client.send(command);
-  } catch (error) {
-    console.error('Error creating folder:', error);
-    throw error;
-  }
+  await conn.client.send(command);
 }
 
-export async function copyFolder(
-  config: AWSConfig,
-  sourcePrefix: string,
-  destinationPrefix: string
-): Promise<void> {
-  const objects = await listObjects(config, sourcePrefix);
-  
+export async function copyFolder(conn: S3Connection, sourcePrefix: string, destinationPrefix: string): Promise<void> {
+  const objects = await listObjects(conn, sourcePrefix);
+
   for (const obj of objects) {
     const relativePath = obj.key.replace(sourcePrefix, '');
     const newKey = `${destinationPrefix}${relativePath}`;
-    
+
     if (obj.isFolder) {
-      await createFolder(config, newKey);
-      await copyFolder(config, obj.key, newKey);
+      await createFolder(conn, newKey);
+      await copyFolder(conn, obj.key, newKey);
     } else {
-      await copyFile(config, obj.key, newKey);
+      await copyFile(conn, obj.key, newKey);
     }
   }
 }
 
-export async function moveFolder(
-  config: AWSConfig,
-  sourcePrefix: string,
-  destinationPrefix: string
-): Promise<void> {
-  await copyFolder(config, sourcePrefix, destinationPrefix);
-  await deleteFolder(config, sourcePrefix);
+export async function moveFolder(conn: S3Connection, sourcePrefix: string, destinationPrefix: string): Promise<void> {
+  await copyFolder(conn, sourcePrefix, destinationPrefix);
+  await deleteFolder(conn, sourcePrefix);
 }
-

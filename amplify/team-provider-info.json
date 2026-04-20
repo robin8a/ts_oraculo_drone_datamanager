@@ -10,6 +10,20 @@
       "StackName": "amplify-tsoraculodronedatama-dev-1d195",
       "StackId": "arn:aws:cloudformation:us-east-1:879381245127:stack/amplify-tsoraculodronedatama-dev-1d195/2d38fac0-dfbc-11f0-9f84-0e59111daf25",
       "AmplifyAppId": "d2yaf6u7gkp21"
+    },
+    "categories": {
+      "hosting": {
+        "amplifyhosting": {
+          "appId": "d2yaf6u7gkp21",
+          "type": "cicd"
+        }
+      },
+      "auth": {
+        "tsoraculodronedatama73335a2a": {}
+      },
+      "storage": {
+        "tsoraculodronesdata": {}
+      }
     }
   }
 }

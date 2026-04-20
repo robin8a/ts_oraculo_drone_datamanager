@@ -1,0 +1,137 @@
+{
+  "brandName": "Terrasacha",
+  "brandEssence": {
+    "slogan": "Pioneros del Mañana",
+    "coreValues": [
+      "Innovación", "Conciencia", "Transformación", "Educación", "Responsabilidad",
+      "Imaginación", "Cambio", "Inspiración", "Esperanza", "Colectividad"
+    ],
+    "tone": "Inspiracional, ecológico, tecnológico, ancestral"
+  },
+  "logoSystem": {
+    "imagotype": {
+      "description": "Planet Earth with concentric circles symbolizing sustainability and impact.",
+      "elements": ["Earth shape", "concentric rings", "COO symbol (CO2 hint)"],
+      "construction": {
+        "modularGrid": "X-based proportions",
+        "safeArea": "Minimum 2X padding around logo"
+      }
+    },
+    "isotype": {
+      "description": "Monogram variant, abstract, science meets nature",
+      "usage": "When space is constrained or subtle branding is needed"
+    },
+    "variations": {
+      "primaryColorVersion": true,
+      "blackWhiteVersion": true,
+      "secondaryColorPalettes": true,
+      "negativeVersion": true,
+      "incorrectUses": [
+        "Color changes",
+        "Stretching/distortion",
+        "Removing elements",
+        "Adding effects",
+        "Font changes"
+      ]
+    }
+  },
+  "colorSystem": {
+    "primary": {
+      "name": "Verde Selva",
+      "pantone": "5757C",
+      "rgb": [109, 110, 53],
+      "cmyk": [65.28, 59.69, 94.51, 9.75],
+      "hex": "#6e6c35"
+    },
+    "secondary": [
+      {
+        "name": "Verde Bosques Nublados",
+        "pantone": "5743C",
+        "rgb": [68, 72, 44],
+        "cmyk": [76.93, 65.29, 89.91, 33.7],
+        "hex": "#44482c"
+      },
+      {
+        "name": "Verde Pradera",
+        "pantone": "576C",
+        "rgb": [132, 155, 80],
+        "cmyk": [62.62, 29.91, 87.41, 0],
+        "hex": "#849b50"
+      },
+      {
+        "name": "Verde Claro",
+        "pantone": "577C",
+        "rgb": [177, 193, 129],
+        "cmyk": [41.89, 12.99, 63.06, 0],
+        "hex": "#b1c181"
+      },
+      {
+        "name": "Amarillo Tierra",
+        "pantone": "7402C",
+        "rgb": [232, 215, 154],
+        "cmyk": [11.23, 18.03, 64.87, 0],
+        "hex": "#e8d79a"
+      }
+    ],
+    "guidelines": {
+      "contrast": "Ensure visibility and legibility on all backgrounds",
+      "mixing": "Color blends are allowed for sublines or product divisions"
+    }
+  },
+  "typography": {
+    "primaryFont": {
+      "name": "Typographica",
+      "characteristics": [
+        "Clear", "Modern", "Friendly", "Simple style", "Highly legible"
+      ],
+      "usage": "Internal and external communications"
+    },
+    "secondaryFonts": [
+      {
+        "name": "Champagne & Limousines Bold",
+        "tracking": "500pt",
+        "usage": "Slogan and promotional messages"
+      },
+      {
+        "name": "Futura Bold",
+        "usage": "Alternate heading or accent font"
+      }
+    ]
+  },
+  "applicationRules": {
+    "minimumSizes": {
+      "print": "25mm",
+      "digital": "120px"
+    },
+    "imageOverlay": {
+      "rule": "Use white logo on photographic or non-corporate backgrounds"
+    },
+    "logoProtectionZone": "2X surrounding buffer space",
+    "disciplineReminder": "Visual consistency must be preserved across media"
+  },
+  "usageExamples": {
+    "correct": [
+      "Primary logo on white background",
+      "White logo on dark photos",
+      "Secondary palette for brand extensions"
+    ],
+    "incorrect": [
+      "Color modifications",
+      "Proportion distortion",
+      "Removing logo components",
+      "Adding effects",
+      "Changing fonts"
+    ]
+  },
+  "slogan": {
+    "text": "Pioneros del Mañana",
+    "meaning": {
+      "innovation": "Exploration and leadership into the future",
+      "responsibility": "Sustainability for future generations",
+      "collectiveAction": "Shared mission for transformation"
+    },
+    "visual": {
+      "independentUsage": "May appear without logo, with its own composition"
+    }
+  }
+}
