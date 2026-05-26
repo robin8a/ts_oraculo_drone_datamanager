@@ -1,6 +1,8 @@
 import { useAuth } from '../contexts/AuthContext';
 import { useProject } from '../contexts/ProjectContext';
 import { useNavigate } from 'react-router-dom';
+import { USER_ROLES } from '../constants/roles';
+import { canAccessFileManager } from '../utils/permissions';
 
 export function ProjectsPage() {
   const { user } = useAuth();
@@ -9,7 +11,9 @@ export function ProjectsPage() {
 
   const handleSelectProject = (projectId: string) => {
     setSelectedProject(projectId);
-    navigate('/files');
+    if (user && canAccessFileManager(user.role)) {
+      navigate('/files');
+    }
   };
 
   return (
@@ -18,9 +22,9 @@ export function ProjectsPage() {
         <p className="brand-kicker">Portafolio</p>
         <h1 className="brand-page-title mt-3">Proyectos disponibles</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-terra-deep/75">
-          Cada proyecto es un prefijo en el bucket. Dentro, la documentación se organiza por jerarquía territorial: país,
-          departamento, municipio, predio, parcela e identificador de árbol; después puedes añadir carpetas de vuelo u
-          otros archivos.
+          {user?.role === USER_ROLES.ANALYST
+            ? 'Elige el proyecto y organiza la documentación en staging. Solo aparecerá en la zona definitiva cuando tu supervisor apruebe el envío.'
+            : 'Cada proyecto agrupa la documentación avalada bajo approved/ con jerarquía territorial.'}
         </p>
       </section>
       <div className="brand-card p-6 md:p-8">

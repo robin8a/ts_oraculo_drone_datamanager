@@ -1,26 +1,38 @@
-/**
- * Prefijo bajo el bucket donde Amplify Storage suele conceder permisos al rol autenticado
- * (`s3:ListBucket` con condición `s3:prefix` como `public/*`).
- * Sin prefijo, ListObjects en la raíz del bucket suele devolver 403.
- *
- * Cambia con variable de entorno: `VITE_S3_ROOT_PREFIX` (ej. `protected` si usas rutas protegidas).
- */
-export const getS3RootPrefix = (): string => {
-  const raw = import.meta.env.VITE_S3_ROOT_PREFIX;
-  if (raw === undefined) {
-    return 'public';
-  }
-  const trimmed = String(raw).replace(/^\/+|\/+$/g, '');
-  if (trimmed === '') {
-    return '';
-  }
-  return trimmed;
-};
+import { APPROVED_ROOT } from './workflowStorage';
+import { getS3RootPrefix } from './storageRoot';
 
-/** `public/{projectId}/` (o `{root}/{projectId}/`) */
+export { getS3RootPrefix } from './storageRoot';
+
+/** `public/{projectId}/` (o `{root}/{projectId}/`) — legado / Amplify Storage */
 export const projectRootPrefixInS3 = (projectId: string): string => {
   const root = getS3RootPrefix();
   return root ? `${root}/${projectId}/` : `${projectId}/`;
+};
+
+/** `{root}/approved/{projectId}/` — documentación avalada */
+export const approvedProjectRootPrefixInS3 = (projectId: string): string =>
+  `${APPROVED_ROOT}/${projectId}/`;
+
+export const listPrefixForApprovedProjectPath = (
+  projectId: string,
+  currentPath: string
+): string => {
+  const base = approvedProjectRootPrefixInS3(projectId);
+  if (!currentPath) {
+    return base;
+  }
+  const normalized = currentPath.endsWith('/') ? currentPath : `${currentPath}/`;
+  return `${base}${normalized}`;
+};
+
+export const objectKeyInApprovedProjectPath = (
+  projectId: string,
+  currentPath: string,
+  name: string,
+  isFolder: boolean
+): string => {
+  const base = listPrefixForApprovedProjectPath(projectId, currentPath);
+  return isFolder ? `${base}${name}/` : `${base}${name}`;
 };
 
 /** Prefijo para ListObjectsV2 bajo el proyecto y la ruta actual del UI. */
@@ -43,3 +55,32 @@ export const objectKeyInProjectPath = (
   const base = listPrefixForProjectPath(projectId, currentPath);
   return isFolder ? `${base}${name}/` : `${base}${name}`;
 };
+
+const normalizePrefix = (prefix: string): string =>
+  prefix.endsWith('/') ? prefix : `${prefix}/`;
+
+/** Prefijo de listado bajo un envío en staging + ruta territorial del UI. */
+export const listPrefixForStagingSubmissionPath = (
+  stagingPrefix: string,
+  currentPath: string
+): string => {
+  const base = normalizePrefix(stagingPrefix);
+  if (!currentPath) {
+    return base;
+  }
+  const normalized = currentPath.endsWith('/') ? currentPath : `${currentPath}/`;
+  return `${base}${normalized}`;
+};
+
+export const objectKeyInStagingSubmissionPath = (
+  stagingPrefix: string,
+  currentPath: string,
+  name: string,
+  isFolder: boolean
+): string => {
+  const base = listPrefixForStagingSubmissionPath(stagingPrefix, currentPath);
+  return isFolder ? `${base}${name}/` : `${base}${name}`;
+};
+
+export const stagingSubmissionRootPrefix = (stagingPrefix: string): string =>
+  normalizePrefix(stagingPrefix);

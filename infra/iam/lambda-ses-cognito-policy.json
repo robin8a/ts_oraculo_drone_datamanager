@@ -1,0 +1,27 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CognitoAdminUsers",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminUpdateUserAttributes",
+        "cognito-idp:AdminAddUserToGroup",
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminListGroupsForUser",
+        "cognito-idp:ListUsers",
+        "cognito-idp:ListUsersInGroup"
+      ],
+      "Resource": "arn:aws:cognito-idp:us-east-1:TU_ACCOUNT_ID:userpool/us-east-1_hZhDznUsp"
+    },
+    {
+      "Sid": "SesSendWelcomeEmail",
+      "Effect": "Allow",
+      "Action": ["ses:SendEmail", "ses:SendRawEmail"],
+      "Resource": [
+        "arn:aws:ses:us-east-1:TU_ACCOUNT_ID:identity/TU_EMAIL_VERIFICADO@dominio.com"
+      ]
+    }
+  ]
+}

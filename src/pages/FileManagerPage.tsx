@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProject } from '../contexts/ProjectContext';
+import { SUBMISSION_STATUS } from '../constants/workflowStorage';
+import type { SubmissionRecord } from '../types/workflow';
 import { useClipboard } from '../contexts/ClipboardContext';
 import { FileList } from '../components/FileManager/FileList';
 import { UploadModal } from '../components/FileManager/UploadModal';
@@ -25,21 +27,40 @@ import type { S3Connection, S3Object } from '../services/s3Service';
 import { getCognitoDirectS3Connection } from '../utils/cognitoS3Connection';
 import { GEO_HIERARCHY_LEVEL_LABELS, getGeoLevelLabel } from '../constants/geoHierarchy';
 import {
-  getS3RootPrefix,
-  listPrefixForProjectPath,
-  objectKeyInProjectPath,
-  projectRootPrefixInS3,
+  approvedProjectRootPrefixInS3,
+  listPrefixForApprovedProjectPath,
+  listPrefixForStagingSubmissionPath,
+  objectKeyInApprovedProjectPath,
+  objectKeyInStagingSubmissionPath,
+  stagingSubmissionRootPrefix,
 } from '../constants/s3StoragePrefix';
+import { APPROVED_ROOT, STAGING_ROOT } from '../constants/workflowStorage';
+import { useRolePermissions } from '../hooks/useRolePermissions';
+import type { RolePermissions } from '../utils/permissions';
+import { usesStagingFileManager } from '../utils/permissions';
+import {
+  resolveAnalystSubmissionForProject,
+  submitForReview,
+} from '../services/submissionWorkflowService';
 
 type ImageThumbnailProps = {
   s3Connection: S3Connection;
   item: S3Object;
+  permissions: RolePermissions;
   onPreview: (key: string) => void;
   onDownload: (key: string) => void;
 };
 
+const SUBMISSION_STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Borrador',
+  PENDING_REVIEW: 'En revisión',
+  REJECTED: 'Rechazado',
+};
+
 export function FileManagerPage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const permissions = useRolePermissions();
+  const isAnalystMode = usesStagingFileManager(user?.role ?? null);
   const { selectedProject, currentPath, setCurrentPath } = useProject();
   const { clipboard, clipboardOperation, addToClipboard, clearClipboard } = useClipboard();
   const [files, setFiles] = useState<S3Object[]>([]);
@@ -56,6 +77,34 @@ export function FileManagerPage() {
   const [previewImageName, setPreviewImageName] = useState<string>('');
   const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
   const [filterImagesOnly, setFilterImagesOnly] = useState(false);
+  const [activeSubmission, setActiveSubmission] = useState<SubmissionRecord | null>(null);
+  const [canEditStaging, setCanEditStaging] = useState(false);
+  const [submissionLoading, setSubmissionLoading] = useState(false);
+  const [submissionError, setSubmissionError] = useState('');
+  const [workflowMessage, setWorkflowMessage] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  const effectivePermissions = useMemo((): RolePermissions => {
+    if (!isAnalystMode || canEditStaging) {
+      return permissions;
+    }
+    return {
+      ...permissions,
+      manageStagingFiles: false,
+      deleteFiles: false,
+      renameFiles: false,
+      copyMoveFiles: false,
+      createFolders: false,
+    };
+  }, [isAnalystMode, canEditStaging, permissions]);
+
+  const canUpload =
+    permissions.manageApprovedFiles ||
+    (isAnalystMode && canEditStaging && permissions.manageStagingFiles);
+
+  const canCreateFolders =
+    permissions.createFolders &&
+    (!isAnalystMode || (canEditStaging && permissions.manageStagingFiles));
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -93,35 +142,131 @@ export function FileManagerPage() {
     };
   }, [isAuthenticated]);
 
-  useEffect(() => {
-    if (selectedProject && s3Conn) {
-      void loadFiles();
+  const loadAnalystSubmission = useCallback(async () => {
+    if (!isAnalystMode || !s3Conn || !selectedProject || !user) {
+      return;
     }
-  }, [selectedProject, currentPath, s3Conn]);
+    if (!user.supervisor_id) {
+      setSubmissionError(
+        'No tienes supervisor asignado. Pide al administrador que configure custom:supervisor_id.'
+      );
+      setActiveSubmission(null);
+      setCanEditStaging(false);
+      return;
+    }
 
-  const loadFiles = async () => {
-    if (!selectedProject || !s3Conn) return;
+    setSubmissionLoading(true);
+    setSubmissionError('');
+    try {
+      const { record, canEdit } = await resolveAnalystSubmissionForProject(s3Conn, {
+        projectId: selectedProject,
+        analystUsername: user.username,
+        supervisorUsername: user.supervisor_id,
+      });
+      setActiveSubmission(record);
+      setCanEditStaging(canEdit);
+    } catch (err: unknown) {
+      setSubmissionError(
+        err instanceof Error ? err.message : 'No se pudo preparar el envío en staging'
+      );
+      setActiveSubmission(null);
+      setCanEditStaging(false);
+    } finally {
+      setSubmissionLoading(false);
+    }
+  }, [isAnalystMode, s3Conn, selectedProject, user]);
+
+  useEffect(() => {
+    if (isAnalystMode && s3Conn && selectedProject) {
+      void loadAnalystSubmission();
+    }
+  }, [isAnalystMode, s3Conn, selectedProject, loadAnalystSubmission]);
+
+  useEffect(() => {
+    setCurrentPath('');
+  }, [selectedProject, activeSubmission?.id, setCurrentPath]);
+
+  const loadFiles = useCallback(async () => {
+    if (!selectedProject || !s3Conn) {
+      return;
+    }
+    if (isAnalystMode && !activeSubmission) {
+      return;
+    }
 
     setLoading(true);
     setError('');
 
     try {
-      const prefix = listPrefixForProjectPath(selectedProject, currentPath);
+      const prefix = isAnalystMode
+        ? listPrefixForStagingSubmissionPath(activeSubmission!.stagingPrefix, currentPath)
+        : listPrefixForApprovedProjectPath(selectedProject, currentPath);
       const objects = await listObjects(s3Conn, prefix);
       setFiles(objects);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load files. Please check your AWS credentials and bucket configuration.');
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'No se pudieron cargar los archivos. Revisa credenciales y permisos S3.';
+      setError(message);
     } finally {
       setLoading(false);
     }
+  }, [selectedProject, s3Conn, isAnalystMode, activeSubmission, currentPath]);
+
+  useEffect(() => {
+    if (selectedProject && s3Conn) {
+      if (!isAnalystMode || activeSubmission) {
+        void loadFiles();
+      }
+    }
+  }, [selectedProject, currentPath, s3Conn, isAnalystMode, activeSubmission, loadFiles]);
+
+  const buildObjectKey = (name: string, isFolder: boolean): string => {
+    if (!selectedProject) {
+      throw new Error('Sin proyecto seleccionado');
+    }
+    if (isAnalystMode && activeSubmission) {
+      return objectKeyInStagingSubmissionPath(
+        activeSubmission.stagingPrefix,
+        currentPath,
+        name,
+        isFolder
+      );
+    }
+    return objectKeyInApprovedProjectPath(selectedProject, currentPath, name, isFolder);
   };
 
   const handleUpload = async (file: File) => {
-    if (!selectedProject || !s3Conn) return;
+    if (!selectedProject || !s3Conn) {
+      return;
+    }
+    if (isAnalystMode && !canEditStaging) {
+      return;
+    }
 
-    const key = objectKeyInProjectPath(selectedProject, currentPath, file.name, false);
+    const key = buildObjectKey(file.name, false);
     await uploadFile(s3Conn, key, file);
     await loadFiles();
+  };
+
+  const handleSubmitForReview = async () => {
+    if (!s3Conn || !activeSubmission || !canEditStaging) {
+      return;
+    }
+    setSubmittingReview(true);
+    setWorkflowMessage('');
+    setError('');
+    try {
+      const updated = await submitForReview(s3Conn, activeSubmission.id);
+      setActiveSubmission(updated);
+      setCanEditStaging(false);
+      setWorkflowMessage('Envío enviado a revisión. Tu supervisor lo verá en su bandeja.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo enviar a revisión');
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   const handleDownload = async (key: string) => {
@@ -188,16 +333,13 @@ export function FileManagerPage() {
   };
 
   const handlePaste = async () => {
-    if (!clipboard.length || !s3Conn || !selectedProject) return;
+    if (!clipboard.length || !s3Conn || !selectedProject) {
+      return;
+    }
 
     try {
       for (const item of clipboard) {
-        const destinationKey = objectKeyInProjectPath(
-          selectedProject,
-          currentPath,
-          item.name,
-          item.isFolder
-        );
+        const destinationKey = buildObjectKey(item.name, item.isFolder);
 
         if (item.isFolder) {
           if (clipboardOperation === 'copy') {
@@ -221,16 +363,25 @@ export function FileManagerPage() {
   };
 
   const handleCreateFolder = async (folderName: string) => {
-    if (!selectedProject || !s3Conn) return;
+    if (!selectedProject || !s3Conn) {
+      return;
+    }
+    if (isAnalystMode && !canEditStaging) {
+      return;
+    }
 
-    const key = objectKeyInProjectPath(selectedProject, currentPath, folderName, true);
+    const key = buildObjectKey(folderName, true);
     await createFolder(s3Conn, key);
     await loadFiles();
   };
 
   const handleNavigate = (key: string) => {
-    if (!selectedProject) return;
-    const base = projectRootPrefixInS3(selectedProject);
+    if (!selectedProject) {
+      return;
+    }
+    const base = isAnalystMode && activeSubmission
+      ? stagingSubmissionRootPrefix(activeSubmission.stagingPrefix)
+      : approvedProjectRootPrefixInS3(selectedProject);
     const relativePath = key.replace(base, '');
     setCurrentPath(relativePath);
   };
@@ -282,6 +433,22 @@ export function FileManagerPage() {
     );
   }
 
+  if (isAnalystMode && submissionLoading) {
+    return (
+      <div className="brand-card py-12 text-center text-terra-deep/70">
+        Preparando tu espacio de trabajo en staging…
+      </div>
+    );
+  }
+
+  if (isAnalystMode && submissionError) {
+    return (
+      <div className="brand-card py-12 text-center space-y-3">
+        <p className="text-red-700">{submissionError}</p>
+      </div>
+    );
+  }
+
   const breadcrumbs = currentPath.split('/').filter(Boolean);
 
   return (
@@ -289,21 +456,46 @@ export function FileManagerPage() {
       <div className="brand-card flex flex-col gap-6 p-6 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="brand-kicker">Gestor documental</p>
-          <h1 className="brand-page-title mt-3 text-3xl">Archivos del proyecto</h1>
+          <h1 className="brand-page-title mt-3 text-3xl">
+            {isAnalystMode ? 'Subir documentación' : 'Archivos del proyecto'}
+          </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-terra-deep/75">
-            Las rutas en el bucket siguen la jerarquía territorial:{' '}
+            Las rutas siguen la jerarquía territorial:{' '}
             <span className="font-medium text-terra-deep">
               {GEO_HIERARCHY_LEVEL_LABELS.join(' → ')}
             </span>
             . Debajo del árbol puedes añadir carpetas de vuelo u otros datos (por ejemplo{' '}
             <code className="rounded bg-terra-cream px-1 py-0.5 text-xs">vuelo_de_drone_001</code>
-            ). Los objetos se guardan bajo el prefijo{' '}
-            <code className="rounded bg-terra-cream px-1 py-0.5 text-xs">
-              {getS3RootPrefix() ? `${getS3RootPrefix()}/` : '(raíz del bucket)/'}
-            </code>{' '}
-            (compatible con permisos típicos de Amplify Storage; configurable con{' '}
-            <code className="text-xs">VITE_S3_ROOT_PREFIX</code>).
+            ).
+            {isAnalystMode ? (
+              <>
+                {' '}
+                Los archivos se guardan en{' '}
+                <code className="rounded bg-terra-cream px-1 py-0.5 text-xs">{STAGING_ROOT}/</code>{' '}
+                y solo pasan a{' '}
+                <code className="rounded bg-terra-cream px-1 py-0.5 text-xs">{APPROVED_ROOT}/</code>{' '}
+                cuando tu supervisor aprueba el envío.
+              </>
+            ) : (
+              <>
+                {' '}
+                Solo se muestra documentación ya avalada, bajo{' '}
+                <code className="rounded bg-terra-cream px-1 py-0.5 text-xs">{APPROVED_ROOT}/</code>.
+                {permissions.manageApprovedFiles
+                  ? ' Puedes gestionar archivos (administrador).'
+                  : ' Modo consulta: descargar y previsualizar (supervisor).'}
+              </>
+            )}
           </p>
+          {isAnalystMode && activeSubmission ? (
+            <p className="mt-2 text-sm font-medium text-terra-primary">
+              Estado del envío:{' '}
+              {SUBMISSION_STATUS_LABELS[activeSubmission.status] ?? activeSubmission.status}
+              {activeSubmission.status === SUBMISSION_STATUS.REJECTED && activeSubmission.rejectReason
+                ? ` — ${activeSubmission.rejectReason}`
+                : ''}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2 rounded-2xl border border-terra-moss/30 bg-terra-cream/70 px-4 py-3">
@@ -346,7 +538,7 @@ export function FileManagerPage() {
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
-          {clipboard.length > 0 && (
+          {effectivePermissions.copyMoveFiles && clipboard.length > 0 && (
             <button
               onClick={handlePaste}
               className="rounded-xl bg-terra-meadow px-4 py-2 font-medium text-white transition hover:bg-terra-primary"
@@ -354,21 +546,48 @@ export function FileManagerPage() {
               Pegar ({clipboardOperation})
             </button>
           )}
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            className="brand-button-primary"
-          >
-            Subir archivo
-          </button>
-          <button
-            onClick={() => setIsCreateFolderModalOpen(true)}
-            className="brand-button-secondary"
-          >
-            Crear carpeta
-          </button>
+          {canUpload && (
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="brand-button-primary"
+            >
+              Subir archivo
+            </button>
+          )}
+          {isAnalystMode && canEditStaging && permissions.submitForReview && (
+            <button
+              type="button"
+              disabled={submittingReview}
+              onClick={() => void handleSubmitForReview()}
+              className="brand-button-secondary"
+            >
+              {submittingReview ? 'Enviando…' : 'Enviar a revisión'}
+            </button>
+          )}
+          {canCreateFolders && (
+            <button
+              onClick={() => setIsCreateFolderModalOpen(true)}
+              className="brand-button-secondary"
+            >
+              Crear carpeta
+            </button>
+          )}
         </div>
       </div>
       </div>
+
+      {workflowMessage ? (
+        <div className="rounded-2xl border border-terra-moss/30 bg-terra-moss/10 px-4 py-3 text-sm text-terra-deep">
+          {workflowMessage}
+        </div>
+      ) : null}
+
+      {isAnalystMode && activeSubmission?.status === SUBMISSION_STATUS.PENDING_REVIEW ? (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          Este envío está en revisión. Puedes consultar los archivos, pero no modificarlos hasta que
+          tu supervisor apruebe o rechace.
+        </div>
+      ) : null}
 
       <div className="brand-panel p-4">
         <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
@@ -447,6 +666,7 @@ export function FileManagerPage() {
                   <ImageThumbnail
                     s3Connection={s3Conn}
                     item={item}
+                    permissions={effectivePermissions}
                     onPreview={handlePreview}
                     onDownload={handleDownload}
                   />
@@ -468,6 +688,7 @@ export function FileManagerPage() {
         <FileList
           s3Connection={s3Conn}
           items={filteredFiles}
+          permissions={effectivePermissions}
           onDownload={handleDownload}
           onDelete={handleDelete}
           onRename={(key, name, isFolder) => {
@@ -522,7 +743,7 @@ export function FileManagerPage() {
 }
 
 const ImageThumbnail = (props: ImageThumbnailProps) => {
-  const { s3Connection, item, onPreview, onDownload } = props;
+  const { s3Connection, item, permissions, onPreview, onDownload } = props;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -550,8 +771,14 @@ const ImageThumbnail = (props: ImageThumbnailProps) => {
           <img
             src={imageUrl}
             alt={item.name}
-            className="h-full w-full cursor-pointer object-cover transition-opacity hover:opacity-90"
-            onClick={() => onPreview(item.key)}
+            className={`h-full w-full object-cover transition-opacity ${
+              permissions.previewImages ? 'cursor-pointer hover:opacity-90' : ''
+            }`}
+            onClick={() => {
+              if (permissions.previewImages) {
+                onPreview(item.key);
+              }
+            }}
           />
         ) : (
           <svg className="h-12 w-12 text-terra-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -559,22 +786,30 @@ const ImageThumbnail = (props: ImageThumbnailProps) => {
           </svg>
         )}
       </div>
-      <div className="absolute inset-0 flex items-center justify-center bg-terra-deep/0 opacity-0 transition-all group-hover:bg-terra-deep/55 group-hover:opacity-100">
-        <div className="flex space-x-2">
-          <button
-            onClick={() => onPreview(item.key)}
-            className="brand-button-secondary px-3 py-1 text-sm"
-          >
-            Ver
-          </button>
-          <button
-            onClick={() => onDownload(item.key)}
-            className="brand-button-primary px-3 py-1 text-sm"
-          >
-            Descargar
-          </button>
+      {(permissions.previewImages || permissions.downloadFiles) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-terra-deep/0 opacity-0 transition-all group-hover:bg-terra-deep/55 group-hover:opacity-100">
+          <div className="flex space-x-2">
+            {permissions.previewImages && (
+              <button
+                type="button"
+                onClick={() => onPreview(item.key)}
+                className="brand-button-secondary px-3 py-1 text-sm"
+              >
+                Ver
+              </button>
+            )}
+            {permissions.downloadFiles && (
+              <button
+                type="button"
+                onClick={() => onDownload(item.key)}
+                className="brand-button-primary px-3 py-1 text-sm"
+              >
+                Descargar
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
       <div className="p-2">
         <p className="truncate text-xs text-terra-deep/70" title={item.name}>
           {item.name}

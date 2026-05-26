@@ -1,9 +1,11 @@
 import type { S3Connection, S3Object } from '../../services/s3Service';
+import type { RolePermissions } from '../../utils/permissions';
 import { FileItem } from './FileItem';
 
 interface FileListProps {
   s3Connection: S3Connection;
   items: S3Object[];
+  permissions: RolePermissions;
   onDownload: (key: string) => void;
   onDelete: (key: string, isFolder: boolean) => void;
   onRename: (key: string, name: string, isFolder: boolean) => void;
@@ -16,6 +18,7 @@ interface FileListProps {
 export function FileList({
   s3Connection,
   items,
+  permissions,
   onDownload,
   onDelete,
   onRename,
@@ -40,6 +43,7 @@ export function FileList({
             key={item.key}
             s3Connection={s3Connection}
             item={item}
+            permissions={permissions}
             onDownload={onDownload}
             onDelete={onDelete}
             onRename={onRename}
@@ -53,4 +57,3 @@ export function FileList({
     </div>
   );
 }
-

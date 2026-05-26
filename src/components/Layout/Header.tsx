@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { ROLE_LABELS } from '../../constants/roles';
 
 export function Header() {
   const { user, logout } = useAuth();
@@ -25,7 +26,8 @@ export function Header() {
         <div className="flex items-center gap-4">
           {user && (
             <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm text-white/80">
-              Bienvenido, {user.username}
+              {user.username}
+              {user.role ? ` · ${ROLE_LABELS[user.role]}` : ' · sin rol'}
             </span>
           )}
           <button

@@ -37,7 +37,11 @@
     "resourceName": "tsoraculodronedatama73335a2a",
     "authSelections": "identityPoolAndUserPool",
     "useDefault": "default",
-    "userPoolGroupList": [],
+    "userPoolGroupList": [
+      "ADMIN",
+      "SUPERVISOR",
+      "ANALYST"
+    ],
     "serviceName": "Cognito",
     "usernameCaseSensitive": false,
     "useEnabledMfas": true,

@@ -4,7 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authDebugLog } from '../utils/authDebug';
 
-const AuthLoadingScreen = () => (
+export const AuthLoadingScreen = () => (
   <div
     className="flex min-h-screen items-center justify-center bg-terra-cream/40 px-4"
     role="status"

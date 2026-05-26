@@ -1,9 +1,16 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { isAdminRole, ROLE_LABELS, USER_ROLES } from '../../constants/roles';
+import {
+  canAccessAdminPanel,
+  canAccessFileManager,
+  canAccessSupervisorInbox,
+  usesStagingFileManager,
+} from '../../utils/permissions';
 
 export function Sidebar() {
   const location = useLocation();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
   const getNavClassName = (path: string) =>
@@ -13,6 +20,9 @@ export function Sidebar() {
         : 'text-white/80 hover:bg-white/10 hover:text-white'
     }`;
 
+  const role = user?.role ?? null;
+  const isAdmin = isAdminRole(role);
+
   return (
     <aside className="hidden min-h-full w-72 border-r border-terra-moss/15 bg-terra-deep/95 px-5 py-6 text-white lg:block">
       <div className="mb-8 border-b border-white/10 pb-6">
@@ -21,27 +31,47 @@ export function Sidebar() {
           Terrasacha
         </h2>
         <p className="mt-2 text-sm text-white/65">
-          Plataforma documental inspirada en sostenibilidad, innovación y claridad.
+          {isAdmin
+            ? 'Acceso completo (administrador).'
+            : 'Plataforma documental con roles y aval de supervisores.'}
         </p>
+        {role ? (
+          <p className="mt-3 inline-block rounded-full bg-white/10 px-3 py-1 text-xs text-terra-sand">
+            {ROLE_LABELS[role]}
+          </p>
+        ) : (
+          <p className="mt-3 text-xs text-amber-200">Sin custom:role</p>
+        )}
       </div>
       <nav className="space-y-2">
         <Link to="/home" className={getNavClassName('/home')}>
           Inicio
         </Link>
-        <Link to="/projects" className={getNavClassName('/projects')}>
-          Proyectos
-        </Link>
-        <Link to="/files" className={getNavClassName('/files')}>
-          Archivos
-        </Link>
-        <Link to="/settings" className={getNavClassName('/settings')}>
-          Configuración
-        </Link>
+        {(isAdmin || (role && canAccessSupervisorInbox(role))) && (
+          <Link to="/supervisor" className={getNavClassName('/supervisor')}>
+            Revisión (supervisor)
+          </Link>
+        )}
+        {(isAdmin || (role && canAccessFileManager(role))) && (
+          <>
+            <Link to="/projects" className={getNavClassName('/projects')}>
+              {role === USER_ROLES.ANALYST ? 'Mis proyectos' : 'Proyectos'}
+            </Link>
+            <Link to="/files" className={getNavClassName('/files')}>
+              {role && usesStagingFileManager(role) ? 'Subir archivos' : 'Archivos avalados'}
+            </Link>
+          </>
+        )}
+        {(isAdmin || (role && canAccessAdminPanel(role))) && (
+          <Link to="/admin/users" className={getNavClassName('/admin/users')}>
+            Administración
+          </Link>
+        )}
       </nav>
       <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4">
-        <p className="text-xs uppercase tracking-[0.24em] text-terra-sand/80">Esencia</p>
+        <p className="text-xs uppercase tracking-[0.24em] text-terra-sand/80">Flujo</p>
         <p className="mt-2 text-sm leading-6 text-white/75">
-          Innovación, conciencia y transformación con una presencia visual ecológica y tecnológica.
+          staging → revisión → approved
         </p>
       </div>
       <button
@@ -54,4 +84,3 @@ export function Sidebar() {
     </aside>
   );
 }
-

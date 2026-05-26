@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import type { S3Connection, S3Object } from '../../services/s3Service';
 import { isImageFile, getImageUrl } from '../../services/s3Service';
+import type { RolePermissions } from '../../utils/permissions';
 
 interface FileItemProps {
   s3Connection: S3Connection;
   item: S3Object;
+  permissions: RolePermissions;
   onDownload: (key: string) => void;
   onDelete: (key: string, isFolder: boolean) => void;
   onRename: (key: string, name: string, isFolder: boolean) => void;
@@ -17,6 +19,7 @@ interface FileItemProps {
 export function FileItem({
   s3Connection,
   item,
+  permissions,
   onDownload,
   onDelete,
   onRename,
@@ -30,7 +33,7 @@ export function FileItem({
   const isImage = !item.isFolder && isImageFile(item.name);
 
   useEffect(() => {
-    if (isImage) {
+    if (isImage && permissions.previewImages) {
       setImageLoading(true);
       getImageUrl(s3Connection, item.key)
         .then((url) => {
@@ -41,7 +44,7 @@ export function FileItem({
           setImageLoading(false);
         });
     }
-  }, [isImage, item.key, s3Connection]);
+  }, [isImage, item.key, s3Connection, permissions.previewImages]);
 
   const formatSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -56,7 +59,7 @@ export function FileItem({
   };
 
   const handleImageClick = () => {
-    if (onPreview && isImage) {
+    if (onPreview && isImage && permissions.previewImages) {
       onPreview(item.key);
     }
   };
@@ -66,6 +69,7 @@ export function FileItem({
       <div className="flex flex-1 items-center gap-4">
         {item.isFolder ? (
           <button
+            type="button"
             onClick={() => onNavigate(item.key)}
             className="flex items-center gap-2 text-terra-primary transition hover:text-terra-deep"
           >
@@ -86,7 +90,7 @@ export function FileItem({
           </button>
         ) : (
           <div className="flex flex-1 items-center gap-4">
-            {isImage ? (
+            {isImage && permissions.previewImages ? (
               <div className="flex items-center gap-3">
                 {imageLoading ? (
                   <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-terra-cream">
@@ -97,6 +101,7 @@ export function FileItem({
                   </div>
                 ) : imageUrl ? (
                   <button
+                    type="button"
                     onClick={handleImageClick}
                     className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-2xl border-2 border-terra-moss/45 transition hover:border-terra-primary"
                     title="Haz clic para previsualizar"
@@ -145,54 +150,69 @@ export function FileItem({
       <div className="flex flex-wrap items-center gap-2">
         {!item.isFolder && (
           <>
-            {isImage && onPreview && (
+            {isImage && onPreview && permissions.previewImages && (
               <button
+                type="button"
                 onClick={handleImageClick}
                 className="brand-button-secondary px-3 py-2 text-sm"
-                title="Preview"
+                title="Vista previa"
               >
                 Vista previa
               </button>
             )}
+            {permissions.downloadFiles && (
+              <button
+                type="button"
+                onClick={() => onDownload(item.key)}
+                className="brand-button-primary px-3 py-2 text-sm"
+                title="Descargar"
+              >
+                Descargar
+              </button>
+            )}
+          </>
+        )}
+        {permissions.copyMoveFiles && (
+          <>
             <button
-              onClick={() => onDownload(item.key)}
-              className="brand-button-primary px-3 py-2 text-sm"
-              title="Download"
+              type="button"
+              onClick={() => onCopy(item.key, item.name, item.isFolder)}
+              className="brand-button-secondary px-3 py-2 text-sm"
+              title="Copiar"
             >
-              Descargar
+              Copiar
+            </button>
+            <button
+              type="button"
+              onClick={() => onMove(item.key, item.name, item.isFolder)}
+              className="rounded-xl bg-terra-sand px-3 py-2 text-sm font-medium text-terra-deep transition hover:bg-[#ddcb87]"
+              title="Mover"
+            >
+              Mover
             </button>
           </>
         )}
-        <button
-          onClick={() => onCopy(item.key, item.name, item.isFolder)}
-          className="brand-button-secondary px-3 py-2 text-sm"
-          title="Copy"
-        >
-          Copiar
-        </button>
-        <button
-          onClick={() => onMove(item.key, item.name, item.isFolder)}
-          className="rounded-xl bg-terra-sand px-3 py-2 text-sm font-medium text-terra-deep transition hover:bg-[#ddcb87]"
-          title="Move"
-        >
-          Mover
-        </button>
-        <button
-          onClick={() => onRename(item.key, item.name, item.isFolder)}
-          className="rounded-xl bg-terra-meadow px-3 py-2 text-sm font-medium text-white transition hover:bg-terra-primary"
-          title="Rename"
-        >
-          Renombrar
-        </button>
-        <button
-          onClick={() => onDelete(item.key, item.isFolder)}
-          className="rounded-xl bg-red-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-700"
-          title="Delete"
-        >
-          Eliminar
-        </button>
+        {permissions.renameFiles && (
+          <button
+            type="button"
+            onClick={() => onRename(item.key, item.name, item.isFolder)}
+            className="rounded-xl bg-terra-meadow px-3 py-2 text-sm font-medium text-white transition hover:bg-terra-primary"
+            title="Renombrar"
+          >
+            Renombrar
+          </button>
+        )}
+        {permissions.deleteFiles && (
+          <button
+            type="button"
+            onClick={() => onDelete(item.key, item.isFolder)}
+            className="rounded-xl bg-red-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-red-700"
+            title="Eliminar"
+          >
+            Eliminar
+          </button>
+        )}
       </div>
     </div>
   );
 }
-
