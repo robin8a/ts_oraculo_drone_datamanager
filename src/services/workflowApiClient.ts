@@ -1,4 +1,5 @@
 import { fetchAuthSession } from 'aws-amplify/auth';
+import { WORKFLOW_API_GATEWAY_URL } from '../constants/workflowApi';
 import type {
   AdminUserSummary,
   CreateUserPayload,
@@ -7,11 +8,22 @@ import type {
 } from '../types/workflow';
 
 const getApiBase = (): string => {
-  const base = import.meta.env.VITE_WORKFLOW_API_URL;
-  if (!base || typeof base !== 'string') {
-    return '';
+  const fromEnv = import.meta.env.VITE_WORKFLOW_API_URL;
+  const base =
+    typeof fromEnv === 'string' && fromEnv.trim() ? fromEnv.trim() : '';
+
+  if (!base) {
+    return import.meta.env.PROD ? WORKFLOW_API_GATEWAY_URL : '';
   }
-  return base.replace(/\/$/, '');
+
+  const normalized = base.replace(/\/$/, '');
+
+  // En Amplify/producción no existe el proxy de Vite para /workflow-api
+  if (import.meta.env.PROD && normalized === '/workflow-api') {
+    return WORKFLOW_API_GATEWAY_URL;
+  }
+
+  return normalized;
 };
 
 const getIdToken = async (): Promise<string> => {
@@ -60,7 +72,13 @@ const apiRequest = async <T>(
     try {
       body = JSON.parse(text);
     } catch {
-      body = { message: text };
+      const looksLikeSpaHtml =
+        text.trimStart().startsWith('<!') || text.includes('<div id="root">');
+      body = {
+        message: looksLikeSpaHtml
+          ? 'La API no respondió JSON (¿VITE_WORKFLOW_API_URL apunta a /workflow-api en producción?). Usa la URL de API Gateway.'
+          : text.slice(0, 200),
+      };
     }
   }
 
