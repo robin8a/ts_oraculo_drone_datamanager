@@ -8,11 +8,16 @@ import type { SubmissionRecord, WorkflowNotification } from '../types/workflow';
 import { SubmissionStagingFileList } from '../components/SubmissionStagingFileList';
 import {
   approveSubmission,
+  approveSubmissionFile,
+  deleteNotification,
+  getSubmission,
   listSubmissionsForUser,
   listSupervisorNotifications,
   markNotificationRead,
+  rejectSubmissionFile,
   rejectSubmission,
 } from '../services/submissionWorkflowService';
+import type { StagingFileItem } from '../services/submissionWorkflowService';
 
 export function SupervisorInboxPage() {
   const { user } = useAuth();
@@ -24,8 +29,21 @@ export function SupervisorInboxPage() {
   const [expandedReviewId, setExpandedReviewId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [fileActionBusyKey, setFileActionBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  const isPendingLike = (submission: SubmissionRecord): boolean => {
+    if (submission.status === SUBMISSION_STATUS.PENDING_REVIEW) {
+      return true;
+    }
+    return Boolean(
+      submission.submittedAt &&
+        !submission.reviewedAt &&
+        submission.status !== SUBMISSION_STATUS.APPROVED &&
+        submission.status !== SUBMISSION_STATUS.REJECTED
+    );
+  };
 
   const refresh = useCallback(async () => {
     if (!s3Conn || !user) {
@@ -37,7 +55,32 @@ export function SupervisorInboxPage() {
       listSubmissionsForUser(s3Conn, { role: listRole, username: user.username }),
       listSupervisorNotifications(s3Conn, user.username),
     ]);
-    setSubmissions(subs);
+
+    const byId = new Map(subs.map((submission) => [submission.id, submission]));
+    const notificationSubmissionIds = Array.from(
+      new Set(notifs.map((notification) => notification.submissionId))
+    );
+    const fromNotifications = await Promise.all(
+      notificationSubmissionIds.map((submissionId) => getSubmission(s3Conn, submissionId))
+    );
+
+    for (const submission of fromNotifications) {
+      if (!submission) {
+        continue;
+      }
+      if (submission.supervisorUsername !== user.username && user.role !== USER_ROLES.ADMIN) {
+        continue;
+      }
+      if (!byId.has(submission.id)) {
+        byId.set(submission.id, submission);
+      }
+    }
+
+    const mergedSubmissions = Array.from(byId.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    setSubmissions(mergedSubmissions);
     setNotifications(notifs);
   }, [s3Conn, user]);
 
@@ -45,7 +88,7 @@ export function SupervisorInboxPage() {
     void refresh();
   }, [refresh]);
 
-  const pending = submissions.filter((s) => s.status === SUBMISSION_STATUS.PENDING_REVIEW);
+  const pending = submissions.filter((s) => isPendingLike(s));
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   useEffect(() => {
@@ -101,11 +144,65 @@ export function SupervisorInboxPage() {
     }
   };
 
+  const handleApproveFile = async (submissionId: string, file: StagingFileItem) => {
+    if (!s3Conn || !user) {
+      return;
+    }
+    setFileActionBusyKey(file.key);
+    setError('');
+    try {
+      await approveSubmissionFile(s3Conn, submissionId, user.username, file.key);
+      setMessage(`Archivo aprobado: ${file.name}`);
+      await refresh();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al aprobar archivo');
+    } finally {
+      setFileActionBusyKey(null);
+    }
+  };
+
+  const handleRejectFile = async (submissionId: string, file: StagingFileItem) => {
+    if (!s3Conn || !user) {
+      return;
+    }
+    setFileActionBusyKey(file.key);
+    setError('');
+    try {
+      await rejectSubmissionFile(s3Conn, submissionId, user.username, file.key);
+      setMessage(`Archivo rechazado: ${file.name}`);
+      await refresh();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al rechazar archivo');
+    } finally {
+      setFileActionBusyKey(null);
+    }
+  };
+
   const handleMarkRead = async (notificationId: string) => {
     if (!s3Conn || !user) {
       return;
     }
     await markNotificationRead(s3Conn, user.username, notificationId);
+    await refresh();
+  };
+
+  const handleDeleteNotification = async (notificationId: string) => {
+    if (!s3Conn || !user) {
+      return;
+    }
+    await deleteNotification(s3Conn, user.username, notificationId);
+    await refresh();
+  };
+
+  const handleDeleteReadNotifications = async () => {
+    if (!s3Conn || !user) {
+      return;
+    }
+    const readIds = notifications.filter((n) => n.read).map((n) => n.id);
+    if (readIds.length === 0) {
+      return;
+    }
+    await Promise.all(readIds.map((id) => deleteNotification(s3Conn, user.username, id)));
     await refresh();
   };
 
@@ -156,7 +253,17 @@ export function SupervisorInboxPage() {
       ) : null}
 
       <section className="brand-card p-6">
-        <h2 className="text-lg font-semibold text-terra-deep mb-4">Notificaciones</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-terra-deep">Notificaciones</h2>
+          <button
+            type="button"
+            onClick={() => void handleDeleteReadNotifications()}
+            className="brand-button-secondary text-sm"
+            disabled={!notifications.some((n) => n.read)}
+          >
+            Limpiar leídas
+          </button>
+        </div>
         {notifications.length === 0 ? (
           <p className="text-sm text-terra-deep/70">No hay notificaciones.</p>
         ) : (
@@ -181,6 +288,13 @@ export function SupervisorInboxPage() {
                     Marcar como leída
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="ml-4 mt-2 text-sm text-red-700 underline"
+                  onClick={() => void handleDeleteNotification(n.id)}
+                >
+                  Eliminar
+                </button>
               </li>
             ))}
           </ul>
@@ -235,6 +349,9 @@ export function SupervisorInboxPage() {
                       <SubmissionStagingFileList
                         s3Conn={s3Conn}
                         stagingPrefix={s.stagingPrefix}
+                        actionBusyKey={fileActionBusyKey}
+                        onApproveFile={(file) => handleApproveFile(s.id, file)}
+                        onRejectFile={(file) => handleRejectFile(s.id, file)}
                       />
 
                       <div className="mt-6 flex flex-wrap gap-3 border-t border-terra-moss/15 pt-5">

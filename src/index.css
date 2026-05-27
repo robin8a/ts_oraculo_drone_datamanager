@@ -46,6 +46,12 @@
 }
 
 @layer components {
+  .mask {
+    background: rgba(37, 40, 20, 0.45);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
   .brand-card {
     border-radius: 1.25rem;
     border: 1px solid rgba(177, 193, 129, 0.35);

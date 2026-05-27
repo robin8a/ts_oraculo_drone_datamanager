@@ -78,13 +78,39 @@ export function FileManagerPage() {
   const [viewMode, setViewMode] = useState<'list' | 'gallery'>('list');
   const [filterImagesOnly, setFilterImagesOnly] = useState(false);
   const [activeSubmission, setActiveSubmission] = useState<SubmissionRecord | null>(null);
+  const [pendingSubmissions, setPendingSubmissions] = useState<SubmissionRecord[]>([]);
+  const [selectedPendingSubmissionId, setSelectedPendingSubmissionId] = useState<string | null>(null);
   const [canEditStaging, setCanEditStaging] = useState(false);
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const [submissionError, setSubmissionError] = useState('');
   const [workflowMessage, setWorkflowMessage] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [analystScope, setAnalystScope] = useState<'staging' | 'pending' | 'approved'>('staging');
+
+  const isAnalystApprovedView = isAnalystMode && analystScope === 'approved';
+  const isAnalystStagingView = isAnalystMode && analystScope === 'staging';
+  const isAnalystPendingView = isAnalystMode && analystScope === 'pending';
+  const selectedPendingSubmission = useMemo(
+    () =>
+      selectedPendingSubmissionId
+        ? pendingSubmissions.find((item) => item.id === selectedPendingSubmissionId) ?? null
+        : pendingSubmissions[0] ?? null,
+    [pendingSubmissions, selectedPendingSubmissionId]
+  );
 
   const effectivePermissions = useMemo((): RolePermissions => {
+    if (isAnalystApprovedView || isAnalystPendingView) {
+      return {
+        ...permissions,
+        manageStagingFiles: false,
+        manageApprovedFiles: false,
+        deleteFiles: false,
+        renameFiles: false,
+        copyMoveFiles: false,
+        createFolders: false,
+        submitForReview: false,
+      };
+    }
     if (!isAnalystMode || canEditStaging) {
       return permissions;
     }
@@ -96,15 +122,15 @@ export function FileManagerPage() {
       copyMoveFiles: false,
       createFolders: false,
     };
-  }, [isAnalystMode, canEditStaging, permissions]);
+  }, [isAnalystMode, canEditStaging, permissions, isAnalystApprovedView, isAnalystPendingView]);
 
   const canUpload =
     permissions.manageApprovedFiles ||
-    (isAnalystMode && canEditStaging && permissions.manageStagingFiles);
+    (isAnalystStagingView && canEditStaging && permissions.manageStagingFiles);
 
   const canCreateFolders =
     permissions.createFolders &&
-    (!isAnalystMode || (canEditStaging && permissions.manageStagingFiles));
+    (!isAnalystMode || (isAnalystStagingView && canEditStaging && permissions.manageStagingFiles));
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -158,18 +184,26 @@ export function FileManagerPage() {
     setSubmissionLoading(true);
     setSubmissionError('');
     try {
-      const { record, canEdit } = await resolveAnalystSubmissionForProject(s3Conn, {
+      const { record, canEdit, pendingReviewRecords } = await resolveAnalystSubmissionForProject(s3Conn, {
         projectId: selectedProject,
         analystUsername: user.username,
         supervisorUsername: user.supervisor_id,
       });
       setActiveSubmission(record);
+      setPendingSubmissions(pendingReviewRecords);
+      setSelectedPendingSubmissionId((prev) =>
+        prev && pendingReviewRecords.some((item) => item.id === prev)
+          ? prev
+          : pendingReviewRecords[0]?.id ?? null
+      );
       setCanEditStaging(canEdit);
     } catch (err: unknown) {
       setSubmissionError(
         err instanceof Error ? err.message : 'No se pudo preparar el envío en staging'
       );
       setActiveSubmission(null);
+      setPendingSubmissions([]);
+      setSelectedPendingSubmissionId(null);
       setCanEditStaging(false);
     } finally {
       setSubmissionLoading(false);
@@ -184,13 +218,22 @@ export function FileManagerPage() {
 
   useEffect(() => {
     setCurrentPath('');
-  }, [selectedProject, activeSubmission?.id, setCurrentPath]);
+  }, [selectedProject, activeSubmission?.id, analystScope, setCurrentPath]);
+
+  useEffect(() => {
+    if (isAnalystPendingView && pendingSubmissions.length === 0) {
+      setAnalystScope('staging');
+    }
+  }, [isAnalystPendingView, pendingSubmissions.length]);
 
   const loadFiles = useCallback(async () => {
     if (!selectedProject || !s3Conn) {
       return;
     }
-    if (isAnalystMode && !activeSubmission) {
+    if (isAnalystStagingView && !activeSubmission) {
+      return;
+    }
+    if (isAnalystPendingView && !selectedPendingSubmission) {
       return;
     }
 
@@ -198,10 +241,27 @@ export function FileManagerPage() {
     setError('');
 
     try {
-      const prefix = isAnalystMode
+      const prefix = isAnalystStagingView
         ? listPrefixForStagingSubmissionPath(activeSubmission!.stagingPrefix, currentPath)
-        : listPrefixForApprovedProjectPath(selectedProject, currentPath);
+        : isAnalystPendingView
+          ? listPrefixForStagingSubmissionPath(selectedPendingSubmission!.stagingPrefix, currentPath)
+          : listPrefixForApprovedProjectPath(selectedProject, currentPath);
       const objects = await listObjects(s3Conn, prefix);
+
+      if (isAnalystStagingView && currentPath === '' && objects.length === 0) {
+        const approvedRootObjects = await listObjects(
+          s3Conn,
+          listPrefixForApprovedProjectPath(selectedProject, '')
+        );
+        if (approvedRootObjects.length > 0) {
+          setAnalystScope('approved');
+          setWorkflowMessage(
+            'Tu staging está vacío. Te mostramos automáticamente los archivos aprobados.'
+          );
+          return;
+        }
+      }
+
       setFiles(objects);
     } catch (err: unknown) {
       const message =
@@ -212,21 +272,42 @@ export function FileManagerPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedProject, s3Conn, isAnalystMode, activeSubmission, currentPath]);
+  }, [
+    selectedProject,
+    s3Conn,
+    isAnalystStagingView,
+    isAnalystPendingView,
+    activeSubmission,
+    selectedPendingSubmission,
+    currentPath,
+  ]);
 
   useEffect(() => {
     if (selectedProject && s3Conn) {
-      if (!isAnalystMode || activeSubmission) {
+      if (
+        (!isAnalystStagingView && !isAnalystPendingView) ||
+        (isAnalystStagingView && activeSubmission) ||
+        (isAnalystPendingView && selectedPendingSubmission)
+      ) {
         void loadFiles();
       }
     }
-  }, [selectedProject, currentPath, s3Conn, isAnalystMode, activeSubmission, loadFiles]);
+  }, [
+    selectedProject,
+    currentPath,
+    s3Conn,
+    isAnalystStagingView,
+    isAnalystPendingView,
+    activeSubmission,
+    selectedPendingSubmission,
+    loadFiles,
+  ]);
 
   const buildObjectKey = (name: string, isFolder: boolean): string => {
     if (!selectedProject) {
       throw new Error('Sin proyecto seleccionado');
     }
-    if (isAnalystMode && activeSubmission) {
+    if (isAnalystStagingView && activeSubmission) {
       return objectKeyInStagingSubmissionPath(
         activeSubmission.stagingPrefix,
         currentPath,
@@ -241,7 +322,7 @@ export function FileManagerPage() {
     if (!selectedProject || !s3Conn) {
       return;
     }
-    if (isAnalystMode && !canEditStaging) {
+    if (isAnalystStagingView && !canEditStaging) {
       return;
     }
 
@@ -251,7 +332,7 @@ export function FileManagerPage() {
   };
 
   const handleSubmitForReview = async () => {
-    if (!s3Conn || !activeSubmission || !canEditStaging) {
+    if (!s3Conn || !activeSubmission || !canEditStaging || !isAnalystStagingView) {
       return;
     }
     setSubmittingReview(true);
@@ -262,6 +343,8 @@ export function FileManagerPage() {
       setActiveSubmission(updated);
       setCanEditStaging(false);
       setWorkflowMessage('Envío enviado a revisión. Tu supervisor lo verá en su bandeja.');
+      setPendingSubmissions((prev) => [updated, ...prev.filter((item) => item.id !== updated.id)]);
+      setSelectedPendingSubmissionId((prev) => prev ?? updated.id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo enviar a revisión');
     } finally {
@@ -366,7 +449,7 @@ export function FileManagerPage() {
     if (!selectedProject || !s3Conn) {
       return;
     }
-    if (isAnalystMode && !canEditStaging) {
+    if (isAnalystStagingView && !canEditStaging) {
       return;
     }
 
@@ -379,9 +462,12 @@ export function FileManagerPage() {
     if (!selectedProject) {
       return;
     }
-    const base = isAnalystMode && activeSubmission
-      ? stagingSubmissionRootPrefix(activeSubmission.stagingPrefix)
-      : approvedProjectRootPrefixInS3(selectedProject);
+    const base =
+      isAnalystStagingView && activeSubmission
+        ? stagingSubmissionRootPrefix(activeSubmission.stagingPrefix)
+        : isAnalystPendingView && selectedPendingSubmission
+          ? stagingSubmissionRootPrefix(selectedPendingSubmission.stagingPrefix)
+          : approvedProjectRootPrefixInS3(selectedProject);
     const relativePath = key.replace(base, '');
     setCurrentPath(relativePath);
   };
@@ -433,7 +519,7 @@ export function FileManagerPage() {
     );
   }
 
-  if (isAnalystMode && submissionLoading) {
+  if (isAnalystStagingView && submissionLoading) {
     return (
       <div className="brand-card py-12 text-center text-terra-deep/70">
         Preparando tu espacio de trabajo en staging…
@@ -441,7 +527,7 @@ export function FileManagerPage() {
     );
   }
 
-  if (isAnalystMode && submissionError) {
+  if (isAnalystStagingView && submissionError) {
     return (
       <div className="brand-card py-12 text-center space-y-3">
         <p className="text-red-700">{submissionError}</p>
@@ -487,7 +573,7 @@ export function FileManagerPage() {
               </>
             )}
           </p>
-          {isAnalystMode && activeSubmission ? (
+          {isAnalystStagingView && activeSubmission ? (
             <p className="mt-2 text-sm font-medium text-terra-primary">
               Estado del envío:{' '}
               {SUBMISSION_STATUS_LABELS[activeSubmission.status] ?? activeSubmission.status}
@@ -495,6 +581,45 @@ export function FileManagerPage() {
                 ? ` — ${activeSubmission.rejectReason}`
                 : ''}
             </p>
+          ) : null}
+          {isAnalystMode ? (
+            <div className="mt-4 inline-flex rounded-2xl border border-terra-moss/30 bg-white/70 p-1">
+              <button
+                type="button"
+                onClick={() => setAnalystScope('staging')}
+                className={`rounded-xl px-3 py-1.5 text-sm transition ${
+                  analystScope === 'staging'
+                    ? 'bg-terra-primary text-white'
+                    : 'text-terra-deep hover:bg-terra-sand/40'
+                }`}
+              >
+                Mi staging
+              </button>
+              <button
+                type="button"
+                onClick={() => setAnalystScope('approved')}
+                className={`rounded-xl px-3 py-1.5 text-sm transition ${
+                  analystScope === 'approved'
+                    ? 'bg-terra-primary text-white'
+                    : 'text-terra-deep hover:bg-terra-sand/40'
+                }`}
+              >
+                Aprobados
+              </button>
+              {pendingSubmissions.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setAnalystScope('pending')}
+                  className={`rounded-xl px-3 py-1.5 text-sm transition ${
+                    analystScope === 'pending'
+                      ? 'bg-terra-primary text-white'
+                      : 'text-terra-deep hover:bg-terra-sand/40'
+                  }`}
+                >
+                  En revisión ({pendingSubmissions.length})
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-4">
@@ -554,7 +679,7 @@ export function FileManagerPage() {
               Subir archivo
             </button>
           )}
-          {isAnalystMode && canEditStaging && permissions.submitForReview && (
+          {isAnalystStagingView && canEditStaging && permissions.submitForReview && (
             <button
               type="button"
               disabled={submittingReview}
@@ -582,10 +707,42 @@ export function FileManagerPage() {
         </div>
       ) : null}
 
-      {isAnalystMode && activeSubmission?.status === SUBMISSION_STATUS.PENDING_REVIEW ? (
+      {isAnalystStagingView && pendingSubmissions.length > 0 ? (
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          Este envío está en revisión. Puedes consultar los archivos, pero no modificarlos hasta que
-          tu supervisor apruebe o rechace.
+          Tienes {pendingSubmissions.length} envío(s) en revisión. Puedes seguir subiendo archivos en un
+          nuevo borrador mientras tu supervisor revisa ese lote.
+        </div>
+      ) : null}
+
+      {isAnalystApprovedView ? (
+        <div className="rounded-2xl border border-terra-moss/25 bg-terra-cream/50 px-4 py-3 text-sm text-terra-deep/80">
+          Mostrando documentación aprobada para el proyecto (solo lectura).
+        </div>
+      ) : null}
+
+      {isAnalystPendingView && selectedPendingSubmission ? (
+        <div className="space-y-3">
+          {pendingSubmissions.length > 1 ? (
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+              <div className="flex flex-wrap items-center gap-2">
+                <span>Selecciona envío pendiente:</span>
+                <select
+                  value={selectedPendingSubmission.id}
+                  onChange={(e) => setSelectedPendingSubmissionId(e.target.value)}
+                  className="brand-input w-auto py-1.5 text-xs"
+                >
+                  {pendingSubmissions.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : null}
+          <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            Mostrando archivos del envío pendiente {selectedPendingSubmission.id} (solo lectura).
+          </div>
         </div>
       ) : null}
 

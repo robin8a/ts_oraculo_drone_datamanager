@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { fromArrayBuffer, Pool } from 'geotiff';
 import type { S3Connection, S3Object } from '../../services/s3Service';
 import { isImageFile, getImageUrl } from '../../services/s3Service';
 import type { RolePermissions } from '../../utils/permissions';
@@ -31,20 +32,118 @@ export function FileItem({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
   const isImage = !item.isFolder && isImageFile(item.name);
+  const isTiff = item.name.toLowerCase().endsWith('.tif') || item.name.toLowerCase().endsWith('.tiff');
+
+  const scaleToByte = (value: number, min: number, max: number): number => {
+    if (!Number.isFinite(value)) return 0;
+    if (max <= min) return 0;
+    const normalized = (value - min) / (max - min);
+    return Math.round(Math.max(0, Math.min(1, normalized)) * 255);
+  };
+
+  const bandMinMax = (band: ArrayLike<number>): { min: number; max: number } => {
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < band.length; i += 1) {
+      const value = Number(band[i]);
+      if (!Number.isFinite(value)) continue;
+      if (value < min) min = value;
+      if (value > max) max = value;
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      return { min: 0, max: 1 };
+    }
+    return { min, max };
+  };
+
+  const buildTiffThumbnail = async (signedUrl: string): Promise<string> => {
+    const response = await fetch(signedUrl);
+    if (!response.ok) {
+      throw new Error('No se pudo descargar TIFF');
+    }
+    const buffer = await response.arrayBuffer();
+    const tiff = await fromArrayBuffer(buffer);
+    const image = await tiff.getImage();
+
+    const width = 64;
+    const height = 64;
+    const sampleCount = image.getSamplesPerPixel();
+    const sampleIndexes = sampleCount >= 3 ? [0, 1, 2] : [0];
+    const pool = new Pool();
+    const rasters = await image.readRasters({
+      samples: sampleIndexes,
+      width,
+      height,
+      interleave: false,
+      pool,
+    });
+    await pool.destroy();
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('No se pudo crear thumbnail TIFF');
+    }
+    const imageData = context.createImageData(width, height);
+    const data = imageData.data;
+
+    if (sampleIndexes.length >= 3) {
+      const r = rasters[0];
+      const g = rasters[1];
+      const b = rasters[2];
+      const rRange = bandMinMax(r);
+      const gRange = bandMinMax(g);
+      const bRange = bandMinMax(b);
+      for (let i = 0, j = 0; i < r.length; i += 1, j += 4) {
+        data[j] = scaleToByte(Number(r[i]), rRange.min, rRange.max);
+        data[j + 1] = scaleToByte(Number(g[i]), gRange.min, gRange.max);
+        data[j + 2] = scaleToByte(Number(b[i]), bRange.min, bRange.max);
+        data[j + 3] = 255;
+      }
+    } else {
+      const band = rasters[0];
+      const range = bandMinMax(band);
+      for (let i = 0, j = 0; i < band.length; i += 1, j += 4) {
+        const value = scaleToByte(Number(band[i]), range.min, range.max);
+        data[j] = value;
+        data[j + 1] = value;
+        data[j + 2] = value;
+        data[j + 3] = 255;
+      }
+    }
+
+    context.putImageData(imageData, 0, 0);
+    return canvas.toDataURL('image/png');
+  };
 
   useEffect(() => {
+    let cancelled = false;
     if (isImage && permissions.previewImages) {
       setImageLoading(true);
+      setImageUrl(null);
       getImageUrl(s3Connection, item.key)
-        .then((url) => {
-          setImageUrl(url);
+        .then(async (url) => {
+          if (cancelled) return;
+          if (isTiff) {
+            const thumbnailUrl = await buildTiffThumbnail(url);
+            if (cancelled) return;
+            setImageUrl(thumbnailUrl);
+          } else {
+            setImageUrl(url);
+          }
           setImageLoading(false);
         })
         .catch(() => {
+          if (cancelled) return;
           setImageLoading(false);
         });
     }
-  }, [isImage, item.key, s3Connection, permissions.previewImages]);
+    return () => {
+      cancelled = true;
+    };
+  }, [isImage, item.key, s3Connection, permissions.previewImages, isTiff]);
 
   const formatSize = (bytes: number) => {
     if (bytes === 0) return '0 B';

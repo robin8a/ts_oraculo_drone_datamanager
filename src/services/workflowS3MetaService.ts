@@ -40,6 +40,7 @@ export const putJsonObject = async (
       Key: key,
       Body: body,
       ContentType: 'application/json',
+      CacheControl: 'no-store, max-age=0, must-revalidate',
     })
   );
 };
@@ -50,6 +51,7 @@ export const getJsonObject = async <T>(conn: S3Connection, key: string): Promise
       new GetObjectCommand({
         Bucket: conn.bucket,
         Key: key,
+        ResponseCacheControl: 'no-store, max-age=0, must-revalidate',
       })
     );
     const text = await readBodyAsString(response.Body);

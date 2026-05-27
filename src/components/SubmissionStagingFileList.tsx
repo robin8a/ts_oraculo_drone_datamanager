@@ -18,11 +18,17 @@ const formatFileSize = (bytes: number): string => {
 interface SubmissionStagingFileListProps {
   s3Conn: S3Connection;
   stagingPrefix: string;
+  onApproveFile?: (file: StagingFileItem) => Promise<void>;
+  onRejectFile?: (file: StagingFileItem) => Promise<void>;
+  actionBusyKey?: string | null;
 }
 
 export const SubmissionStagingFileList = ({
   s3Conn,
   stagingPrefix,
+  onApproveFile,
+  onRejectFile,
+  actionBusyKey = null,
 }: SubmissionStagingFileListProps) => {
   const [files, setFiles] = useState<StagingFileItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +59,34 @@ export const SubmissionStagingFileList = ({
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch {
       setError('No se pudo abrir el archivo');
+    }
+  };
+
+  const handleApproveAction = async (file: StagingFileItem) => {
+    if (!onApproveFile) {
+      return;
+    }
+    const previous = files;
+    setFiles((prev) => prev.filter((f) => f.key !== file.key));
+    try {
+      await onApproveFile(file);
+    } catch {
+      setFiles(previous);
+      setError('No se pudo aprobar el archivo');
+    }
+  };
+
+  const handleRejectAction = async (file: StagingFileItem) => {
+    if (!onRejectFile) {
+      return;
+    }
+    const previous = files;
+    setFiles((prev) => prev.filter((f) => f.key !== file.key));
+    try {
+      await onRejectFile(file);
+    } catch {
+      setFiles(previous);
+      setError('No se pudo rechazar el archivo');
     }
   };
 
@@ -107,8 +141,34 @@ export const SubmissionStagingFileList = ({
                 className="brand-button-ghost text-xs py-1.5 px-3 underline-offset-2 hover:underline"
                 onClick={() => void handleDownload(file)}
               >
-                Abrir
+                Descargar
               </button>
+              {onApproveFile ? (
+                <button
+                  type="button"
+                  className="rounded-lg border border-emerald-300 bg-emerald-50 p-2 text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+                  title="Aprobar archivo"
+                  disabled={actionBusyKey === file.key}
+                  onClick={() => void handleApproveAction(file)}
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </button>
+              ) : null}
+              {onRejectFile ? (
+                <button
+                  type="button"
+                  className="rounded-lg border border-red-300 bg-red-50 p-2 text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                  title="Rechazar archivo"
+                  disabled={actionBusyKey === file.key}
+                  onClick={() => void handleRejectAction(file)}
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              ) : null}
             </div>
           </li>
         ))}

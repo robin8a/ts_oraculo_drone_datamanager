@@ -1,4 +1,9 @@
-import { CopyObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+} from '@aws-sdk/client-s3';
 import type { S3Connection } from '../types/s3';
 import type { SubmissionRecord, WorkflowNotification } from '../types/workflow';
 import {
@@ -12,12 +17,107 @@ import {
 import { getJsonObject, listAllSubmissions, putJsonObject } from './workflowS3MetaService';
 import type { UserRole } from '../constants/roles';
 import { USER_ROLES } from '../constants/roles';
+import { pathUnderStorageRoot } from '../constants/storageRoot';
 
 const newSubmissionId = (): string =>
   `sub-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 const newNotificationId = (): string =>
   `ntf-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+const isPendingLikeSubmission = (record: SubmissionRecord): boolean => {
+  if (record.status === SUBMISSION_STATUS.PENDING_REVIEW) {
+    return true;
+  }
+  return Boolean(
+    record.submittedAt &&
+      !record.reviewedAt &&
+      record.status !== SUBMISSION_STATUS.APPROVED &&
+      record.status !== SUBMISSION_STATUS.REJECTED
+  );
+};
+
+const normalizePrefix = (prefix: string): string =>
+  prefix.endsWith('/') ? prefix : `${prefix}/`;
+
+const hasAnyObjectUnderPrefix = async (conn: S3Connection, prefix: string): Promise<boolean> => {
+  const response = await conn.client.send(
+    new ListObjectsV2Command({
+      Bucket: conn.bucket,
+      Prefix: normalizePrefix(prefix),
+      MaxKeys: 1,
+    })
+  );
+  return (response.KeyCount ?? 0) > 0;
+};
+
+const listFolderPrefixes = async (conn: S3Connection, prefix: string): Promise<string[]> => {
+  const response = await conn.client.send(
+    new ListObjectsV2Command({
+      Bucket: conn.bucket,
+      Prefix: normalizePrefix(prefix),
+      Delimiter: '/',
+    })
+  );
+  return (response.CommonPrefixes ?? [])
+    .map((item) => item.Prefix)
+    .filter((value): value is string => Boolean(value));
+};
+
+const createFolderMarker = async (conn: S3Connection, prefix: string): Promise<void> => {
+  await conn.client.send(
+    new PutObjectCommand({
+      Bucket: conn.bucket,
+      Key: normalizePrefix(prefix),
+      Body: '',
+    })
+  );
+};
+
+const copyFolderTreeSkeleton = async (
+  conn: S3Connection,
+  sourcePrefix: string,
+  targetPrefix: string
+): Promise<void> => {
+  const source = normalizePrefix(sourcePrefix);
+  const target = normalizePrefix(targetPrefix);
+  const stack: Array<{ source: string; target: string }> = [{ source, target }];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) {
+      continue;
+    }
+    const children = await listFolderPrefixes(conn, current.source);
+    for (const childSource of children) {
+      const relative = childSource.slice(current.source.length);
+      const childTarget = `${current.target}${relative}`;
+      await createFolderMarker(conn, childTarget);
+      stack.push({ source: childSource, target: childTarget });
+    }
+  }
+};
+
+const seedAnalystStagingFoldersIfEmpty = async (
+  conn: S3Connection,
+  record: SubmissionRecord
+): Promise<void> => {
+  if (await hasAnyObjectUnderPrefix(conn, record.stagingPrefix)) {
+    return;
+  }
+
+  const approvedPrefix = approvedPrefixForProject(record.projectId);
+  const legacyProjectPrefix = `${pathUnderStorageRoot(record.projectId)}/`;
+  const sourceCandidates = [approvedPrefix, legacyProjectPrefix];
+
+  for (const sourcePrefix of sourceCandidates) {
+    if (!(await hasAnyObjectUnderPrefix(conn, sourcePrefix))) {
+      continue;
+    }
+    await copyFolderTreeSkeleton(conn, sourcePrefix, record.stagingPrefix);
+    return;
+  }
+};
 
 export const createDraftSubmission = async (
   conn: S3Connection,
@@ -136,14 +236,52 @@ export const listSubmissionsForUser = async (
     username: string;
   }
 ): Promise<SubmissionRecord[]> => {
+  const rankStatus = (status: SubmissionRecord['status']): number => {
+    if (status === SUBMISSION_STATUS.APPROVED) return 4;
+    if (status === SUBMISSION_STATUS.PENDING_REVIEW) return 3;
+    if (status === SUBMISSION_STATUS.REJECTED) return 2;
+    if (status === SUBMISSION_STATUS.DRAFT) return 1;
+    return 0;
+  };
+
+  const pickBetterRecord = (a: SubmissionRecord, b: SubmissionRecord): SubmissionRecord => {
+    const rankA = rankStatus(a.status);
+    const rankB = rankStatus(b.status);
+    if (rankA !== rankB) {
+      return rankA > rankB ? a : b;
+    }
+    const submittedA = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+    const submittedB = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+    if (submittedA !== submittedB) {
+      return submittedA > submittedB ? a : b;
+    }
+    const reviewedA = a.reviewedAt ? new Date(a.reviewedAt).getTime() : 0;
+    const reviewedB = b.reviewedAt ? new Date(b.reviewedAt).getTime() : 0;
+    if (reviewedA !== reviewedB) {
+      return reviewedA > reviewedB ? a : b;
+    }
+    return new Date(a.createdAt).getTime() >= new Date(b.createdAt).getTime() ? a : b;
+  };
+
   const keys = await listAllSubmissions(conn);
-  const records: SubmissionRecord[] = [];
+  const bySubmissionId = new Map<string, SubmissionRecord>();
 
   for (const key of keys) {
     const record = await getJsonObject<SubmissionRecord>(conn, key);
     if (!record) {
       continue;
     }
+    const existing = bySubmissionId.get(record.id);
+    if (existing) {
+      const chosen = pickBetterRecord(existing, record);
+      bySubmissionId.set(record.id, chosen);
+      continue;
+    }
+    bySubmissionId.set(record.id, record);
+  }
+
+  const records: SubmissionRecord[] = [];
+  for (const record of bySubmissionId.values()) {
     if (filter.role === USER_ROLES.ADMIN) {
       records.push(record);
       continue;
@@ -207,16 +345,51 @@ export const resolveAnalystSubmissionForProject = async (
     analystUsername: string;
     supervisorUsername: string;
   }
-): Promise<{ record: SubmissionRecord; canEdit: boolean }> => {
+): Promise<{
+  record: SubmissionRecord;
+  canEdit: boolean;
+  pendingReviewRecords: SubmissionRecord[];
+}> => {
   const list = await listSubmissionsForUser(conn, {
     role: USER_ROLES.ANALYST,
     username: params.analystUsername,
   });
   const forProject = list.filter((s) => s.projectId === params.projectId);
 
-  const pending = forProject.find((s) => s.status === SUBMISSION_STATUS.PENDING_REVIEW);
-  if (pending) {
-    return { record: pending, canEdit: false };
+  const pendingList = forProject.filter((s) => isPendingLikeSubmission(s));
+  for (const pending of pendingList) {
+    if (pending.status === SUBMISSION_STATUS.PENDING_REVIEW) {
+      continue;
+    }
+    pending.status = SUBMISSION_STATUS.PENDING_REVIEW;
+    await saveSubmission(conn, pending);
+  }
+  if (pendingList.length > 0) {
+    const editableWhilePending = forProject.find(
+      (s) =>
+        !pendingList.some((pending) => pending.id === s.id) &&
+        (s.status === SUBMISSION_STATUS.DRAFT || s.status === SUBMISSION_STATUS.REJECTED)
+    );
+    if (editableWhilePending) {
+      await seedAnalystStagingFoldersIfEmpty(conn, editableWhilePending);
+      return {
+        record: editableWhilePending,
+        canEdit: true,
+        pendingReviewRecords: pendingList,
+      };
+    }
+
+    const draftWhilePending = await createDraftSubmission(conn, {
+      projectId: params.projectId,
+      analystUsername: params.analystUsername,
+      supervisorUsername: params.supervisorUsername,
+    });
+    await seedAnalystStagingFoldersIfEmpty(conn, draftWhilePending);
+    return {
+      record: draftWhilePending,
+      canEdit: true,
+      pendingReviewRecords: pendingList,
+    };
   }
 
   const editable = forProject.find(
@@ -224,7 +397,8 @@ export const resolveAnalystSubmissionForProject = async (
       s.status === SUBMISSION_STATUS.DRAFT || s.status === SUBMISSION_STATUS.REJECTED
   );
   if (editable) {
-    return { record: editable, canEdit: true };
+    await seedAnalystStagingFoldersIfEmpty(conn, editable);
+    return { record: editable, canEdit: true, pendingReviewRecords: [] };
   }
 
   const draft = await createDraftSubmission(conn, {
@@ -232,7 +406,8 @@ export const resolveAnalystSubmissionForProject = async (
     analystUsername: params.analystUsername,
     supervisorUsername: params.supervisorUsername,
   });
-  return { record: draft, canEdit: true };
+  await seedAnalystStagingFoldersIfEmpty(conn, draft);
+  return { record: draft, canEdit: true, pendingReviewRecords: [] };
 };
 
 const createSupervisorNotification = async (
@@ -400,6 +575,94 @@ export const rejectSubmission = async (
   return record;
 };
 
+const ensurePendingForSupervisorAction = (record: SubmissionRecord): void => {
+  if (
+    record.status !== SUBMISSION_STATUS.PENDING_REVIEW &&
+    !(record.submittedAt && !record.reviewedAt)
+  ) {
+    throw new Error('Solo se pueden revisar archivos de envíos pendientes');
+  }
+};
+
+const ensureSubmissionAccess = (
+  record: SubmissionRecord,
+  supervisorUsername: string
+): void => {
+  if (record.supervisorUsername !== supervisorUsername) {
+    throw new Error('No tienes permiso para revisar este envío');
+  }
+};
+
+const ensureFileInsideSubmission = (fileKey: string, stagingPrefix: string): void => {
+  const normalized = stagingPrefix.endsWith('/') ? stagingPrefix : `${stagingPrefix}/`;
+  if (!fileKey.startsWith(normalized) || fileKey.endsWith('/')) {
+    throw new Error('Archivo inválido para este envío');
+  }
+};
+
+export const approveSubmissionFile = async (
+  conn: S3Connection,
+  submissionId: string,
+  supervisorUsername: string,
+  fileKey: string
+): Promise<SubmissionRecord> => {
+  const record = await getSubmission(conn, submissionId);
+  if (!record) {
+    throw new Error('Envío no encontrado');
+  }
+  ensureSubmissionAccess(record, supervisorUsername);
+  ensurePendingForSupervisorAction(record);
+  ensureFileInsideSubmission(fileKey, record.stagingPrefix);
+
+  const approvedBase = approvedPrefixForProject(record.projectId);
+  const relative = fileKey.slice(record.stagingPrefix.length);
+  const destinationKey = `${approvedBase}${relative}`;
+
+  await conn.client.send(
+    new CopyObjectCommand({
+      Bucket: conn.bucket,
+      CopySource: `${conn.bucket}/${fileKey}`,
+      Key: destinationKey,
+    })
+  );
+  await conn.client.send(
+    new DeleteObjectCommand({
+      Bucket: conn.bucket,
+      Key: fileKey,
+    })
+  );
+
+  record.fileCount = await countFilesUnderPrefix(conn, record.stagingPrefix);
+  await saveSubmission(conn, record);
+  return record;
+};
+
+export const rejectSubmissionFile = async (
+  conn: S3Connection,
+  submissionId: string,
+  supervisorUsername: string,
+  fileKey: string
+): Promise<SubmissionRecord> => {
+  const record = await getSubmission(conn, submissionId);
+  if (!record) {
+    throw new Error('Envío no encontrado');
+  }
+  ensureSubmissionAccess(record, supervisorUsername);
+  ensurePendingForSupervisorAction(record);
+  ensureFileInsideSubmission(fileKey, record.stagingPrefix);
+
+  await conn.client.send(
+    new DeleteObjectCommand({
+      Bucket: conn.bucket,
+      Key: fileKey,
+    })
+  );
+
+  record.fileCount = await countFilesUnderPrefix(conn, record.stagingPrefix);
+  await saveSubmission(conn, record);
+  return record;
+};
+
 export const listSupervisorNotifications = async (
   conn: S3Connection,
   supervisorUsername: string
@@ -445,4 +708,18 @@ export const markNotificationRead = async (
   }
   n.read = true;
   await putJsonObject(conn, key, n);
+};
+
+export const deleteNotification = async (
+  conn: S3Connection,
+  supervisorUsername: string,
+  notificationId: string
+): Promise<void> => {
+  const key = notificationMetaKey(supervisorUsername, notificationId);
+  await conn.client.send(
+    new DeleteObjectCommand({
+      Bucket: conn.bucket,
+      Key: key,
+    })
+  );
 };
