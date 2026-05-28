@@ -5,14 +5,11 @@ import type {
   SupervisorsListResponse,
   UsersListResponse,
 } from '../types/workflow';
+import { getWorkflowApiConfigHint, resolveWorkflowApiBase } from '../utils/workflowApiBase';
 
-const getApiBase = (): string => {
-  const base = import.meta.env.VITE_WORKFLOW_API_URL;
-  if (!base || typeof base !== 'string') {
-    return '';
-  }
-  return base.replace(/\/$/, '');
-};
+const getApiBase = (): string => resolveWorkflowApiBase();
+
+export { getWorkflowApiConfigHint };
 
 const getIdToken = async (): Promise<string> => {
   const session = await fetchAuthSession();
@@ -30,7 +27,8 @@ const apiRequest = async <T>(
   const base = getApiBase();
   if (!base) {
     throw new Error(
-      'API de administración no configurada. Define VITE_WORKFLOW_API_URL con la URL de API Gateway (ver WORKFLOW_SETUP.md).'
+      getWorkflowApiConfigHint() ??
+        'API de administración no configurada. Define VITE_WORKFLOW_API_URL (ver WORKFLOW_SETUP.md).'
     );
   }
 

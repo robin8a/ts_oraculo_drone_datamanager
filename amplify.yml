@@ -1,0 +1,24 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+        - chmod +x scripts/amplify-pull-for-build.sh
+        - bash scripts/amplify-pull-for-build.sh
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
+
+# Variables en Amplify Console → Environment variables:
+#   VITE_WORKFLOW_API_URL = https://xxxx.execute-api.us-east-1.amazonaws.com
+#   AMPLIFY_BACKEND_ENV = dev   (opcional; por defecto "dev")
+# AWS_APP_ID lo inyecta Amplify Hosting si la app está vinculada al backend.
+# No uses /workflow-api ni VITE_WORKFLOW_API_PROXY_TARGET en producción.

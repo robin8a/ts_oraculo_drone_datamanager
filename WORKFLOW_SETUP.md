@@ -74,11 +74,14 @@ La función vive en la **consola AWS** (Lambda `datadroneuser` + API HTTP), no e
    - Código: `npm install` en esa carpeta, zip con `index.js` + `node_modules`, subir a Lambda. Handler: `index.handler`.
    - IAM: política en `infra/iam/lambda-ses-cognito-policy.json` (`ses:SendEmail` + Cognito Admin*).
    - **SES**: verificar remitente; en sandbox, verificar también los correos de destino de prueba.
-2. **API Gateway HTTP** — ruta: `POST /users` (solo creación).
+2. **API Gateway HTTP** — rutas integradas con la Lambda:
+   - `GET /users`
+   - `GET /users/supervisors`
+   - `POST /users`
 3. **CORS** (Develop → CORS):
-   - Origen: `http://localhost:5173`
+   - Orígenes: `http://localhost:5173` y la URL de Amplify (ej. `https://main.xxxxx.amplifyapp.com` o dominio propio)
    - Headers: `authorization`, `content-type`
-   - Métodos: `POST`, `OPTIONS` (o `*` si la consola no deja elegir solo POST)
+   - Métodos: `GET`, `POST`, `OPTIONS` (o `*` si la consola no deja elegir solo POST)
    - Credenciales: **No**
    - Pulsa **Guardar** al final de la pantalla (sin esto la API en vivo no envía cabeceras CORS).
    - Si tras guardar sigue fallando: **Implementación** → etapa `$default`, o confirma auto-deploy en Etapas.
@@ -99,6 +102,24 @@ La función vive en la **consola AWS** (Lambda `datadroneuser` + API HTTP), no e
    VITE_WORKFLOW_API_URL=https://xxxx.execute-api.us-east-1.amazonaws.com
    ```
    Reinicia `npm run dev` tras cambiar el `.env`.
+
+## Despliegue en Amplify Hosting
+
+1. Conecta el repositorio; el build usa `amplify.yml`:
+   - `npm ci`
+   - `scripts/amplify-pull-for-build.sh` → genera `src/amplifyconfiguration.json` (Cognito/Identity Pool)
+   - `npm run build` → carpeta `dist`
+2. El backend Amplify de este proyecto usa entorno **`dev`** (`AmplifyAppId`: `d2yaf6u7gkp21`). Si despliegas otra rama con otro entorno, define `AMPLIFY_BACKEND_ENV` en la consola.
+3. En **Amplify Console → Environment variables** (rama que despliegas), define al menos:
+   ```
+   VITE_WORKFLOW_API_URL=https://xxxx.execute-api.us-east-1.amazonaws.com
+   ```
+   Sin barra final. **No** uses `/workflow-api` ni `VITE_WORKFLOW_API_PROXY_TARGET` en Amplify.
+4. Vuelve a desplegar tras cambiar variables (`VITE_*` se incrustan en el build).
+5. En API Gateway CORS, incluye el origen HTTPS de tu app Amplify (además de localhost).
+6. En la Lambda, actualiza `APP_LOGIN_URL` a la URL pública de la app (no `localhost`).
+
+Si el build falla en `amplify pull`, confirma que Hosting y el backend Amplify son la **misma app** en la consola y que el rol de build tiene permisos sobre el backend.
 
 La Lambda necesita permisos IAM: Cognito `AdminCreateUser`, `AdminUpdateUserAttributes`, `AdminAddUserToGroup`, `AdminGetUser` y SES `SendEmail` sobre la identidad del remitente.
 

@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { ROLE_LABELS, USER_ROLES } from '../constants/roles';
 import {
   createAdminUser,
+  getWorkflowApiConfigHint,
   isWorkflowApiConfigured,
   listSupervisors,
   listUsers,
@@ -46,6 +47,7 @@ export function AdminUsersPage() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState('');
   const apiReady = isWorkflowApiConfigured();
+  const apiConfigHint = getWorkflowApiConfigHint();
 
   const loadUsers = useCallback(async () => {
     if (!apiReady) {
@@ -142,9 +144,13 @@ export function AdminUsersPage() {
         </p>
         {!apiReady && (
           <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Configura <code className="text-xs">VITE_WORKFLOW_API_URL</code> con la URL de API Gateway
-            (Lambda en AWS; ver WORKFLOW_SETUP.md). Mientras tanto puedes asignar roles y atributos
-            manualmente en la consola de Cognito.
+            {apiConfigHint ?? (
+              <>
+                Configura <code className="text-xs">VITE_WORKFLOW_API_URL</code> con la URL de API
+                Gateway (ver WORKFLOW_SETUP.md).
+              </>
+            )}{' '}
+            Mientras tanto puedes asignar roles y atributos manualmente en la consola de Cognito.
           </div>
         )}
       </section>
