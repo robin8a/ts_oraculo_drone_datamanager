@@ -1,8 +1,8 @@
 /**
  * Resuelve la base URL de la API de administración (Lambda + API Gateway).
  *
- * - Desarrollo: puede usar `/workflow-api` (proxy de Vite) o URL HTTPS directa.
- * - Producción (Amplify): debe ser la URL HTTPS de API Gateway; el proxy de Vite no existe.
+ * - Desarrollo: `/workflow-api` (proxy Vite) o URL HTTPS directa.
+ * - Producción Amplify: `/workflow-api` (rewrite en amplify.yml) o URL HTTPS directa.
  */
 export const resolveWorkflowApiBase = (): string => {
   const raw = import.meta.env.VITE_WORKFLOW_API_URL;
@@ -12,11 +12,6 @@ export const resolveWorkflowApiBase = (): string => {
 
   const base = raw.trim().replace(/\/$/, '');
   if (!base) {
-    return '';
-  }
-
-  // En build de producción, /workflow-api apuntaría al mismo host de Amplify (404).
-  if (import.meta.env.PROD && base.startsWith('/')) {
     return '';
   }
 
@@ -36,13 +31,9 @@ export const resolveWorkflowApiBase = (): string => {
 export const getWorkflowApiConfigHint = (): string | null => {
   const raw = import.meta.env.VITE_WORKFLOW_API_URL;
   if (!raw || typeof raw !== 'string' || !raw.trim()) {
-    return 'Define VITE_WORKFLOW_API_URL con la URL de API Gateway (ver WORKFLOW_SETUP.md).';
-  }
-
-  if (import.meta.env.PROD && raw.trim().startsWith('/')) {
     return (
-      'En Amplify/producción no uses /workflow-api. En Environment variables pon ' +
-      'VITE_WORKFLOW_API_URL=https://TU-API.execute-api.REGION.amazonaws.com y vuelve a desplegar.'
+      'Define VITE_WORKFLOW_API_URL. En Amplify usa /workflow-api (con rewrite en amplify.yml) ' +
+      'o la URL HTTPS de API Gateway.'
     );
   }
 
@@ -50,5 +41,5 @@ export const getWorkflowApiConfigHint = (): string | null => {
     return null;
   }
 
-  return 'VITE_WORKFLOW_API_URL no es válida. Usa la URL HTTPS de API Gateway sin barra final.';
+  return 'VITE_WORKFLOW_API_URL no es válida.';
 };

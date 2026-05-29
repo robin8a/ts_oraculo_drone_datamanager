@@ -16,9 +16,17 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
+  customRedirects:
+    # Proxy mismo-origen → API Gateway (evita CORS en el navegador)
+    - source: /workflow-api/<*>
+      target: https://vqad6x2236.execute-api.us-east-1.amazonaws.com/<*>
+      status: '200'
+    # SPA: rutas como /admin/users no son archivos físicos → index.html
+    - source: /<*>
+      target: /index.html
+      status: '404-200'
 
-# Variables en Amplify Console → Environment variables:
-#   VITE_WORKFLOW_API_URL = https://xxxx.execute-api.us-east-1.amazonaws.com
-#   AMPLIFY_BACKEND_ENV = dev   (opcional; por defecto "dev")
-# AWS_APP_ID lo inyecta Amplify Hosting si la app está vinculada al backend.
-# No uses /workflow-api ni VITE_WORKFLOW_API_PROXY_TARGET en producción.
+# Amplify Console → Environment variables (rama master):
+#   VITE_WORKFLOW_API_URL=/workflow-api
+# (misma origen; el rewrite de arriba reenvía a API Gateway)
+# No uses la URL directa de execute-api si CORS en API Gateway no responde.

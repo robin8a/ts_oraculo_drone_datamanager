@@ -116,8 +116,10 @@ La función vive en la **consola AWS** (Lambda `datadroneuser` + API HTTP), no e
    ```
    Sin barra final. **No** uses `/workflow-api` ni `VITE_WORKFLOW_API_PROXY_TARGET` en Amplify.
 4. Vuelve a desplegar tras cambiar variables (`VITE_*` se incrustan en el build).
-5. En API Gateway CORS, incluye el origen HTTPS de tu app Amplify (además de localhost).
-6. En la Lambda, actualiza `APP_LOGIN_URL` a la URL pública de la app (no `localhost`).
+5. **Evitar CORS en producción:** en Amplify pon `VITE_WORKFLOW_API_URL=/workflow-api`. El `amplify.yml` del repo incluye un rewrite que reenvía `/workflow-api/*` a API Gateway (misma origen que la app).
+6. **Rutas SPA:** el mismo `amplify.yml` incluye `404-200` → `index.html` para que `/admin/users` no devuelva 404 al recargar.
+7. En API Gateway CORS (solo si usas URL directa `https://...execute-api...`): origen Amplify + localhost.
+8. En la Lambda, actualiza `APP_LOGIN_URL` a la URL pública de la app (no `localhost`).
 
 Si el build falla en `amplify pull`, confirma que Hosting y el backend Amplify son la **misma app** en la consola y que el rol de build tiene permisos sobre el backend.
 
