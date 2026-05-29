@@ -16,17 +16,13 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
-  customRedirects:
-    # Proxy mismo-origen → API Gateway (evita CORS en el navegador)
-    - source: /workflow-api/<*>
-      target: https://vqad6x2236.execute-api.us-east-1.amazonaws.com/<*>
-      status: '200'
-    # SPA: rutas como /admin/users no son archivos físicos → index.html
-    - source: /<*>
-      target: /index.html
-      status: '404-200'
+# Rewrites (proxy + SPA). Deben estar ANTES de la regla catch-all en la consola si editas ahí.
+redirects:
+  - source: /workflow-api/<*>
+    target: https://vqad6x2236.execute-api.us-east-1.amazonaws.com/<*>
+    status: '200'
+  - source: /<*>
+    target: /index.html
+    status: '404-200'
 
-# Amplify Console → Environment variables (rama master):
-#   VITE_WORKFLOW_API_URL=/workflow-api
-# (misma origen; el rewrite de arriba reenvía a API Gateway)
-# No uses la URL directa de execute-api si CORS en API Gateway no responde.
+# Amplify Console → VITE_WORKFLOW_API_URL=/workflow-api

@@ -9,6 +9,17 @@ import { getWorkflowApiConfigHint, resolveWorkflowApiBase } from '../utils/workf
 
 const getApiBase = (): string => resolveWorkflowApiBase();
 
+/** Evita /workflow-api//users y barras finales que API Gateway no reconoce (/users/ → 404). */
+const buildApiUrl = (base: string, path: string): string => {
+  const normalizedBase = base.replace(/\/$/, '');
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const withoutTrailingSlash =
+    normalizedPath.length > 1 && normalizedPath.endsWith('/')
+      ? normalizedPath.slice(0, -1)
+      : normalizedPath;
+  return `${normalizedBase}${withoutTrailingSlash}`;
+};
+
 export { getWorkflowApiConfigHint };
 
 const getIdToken = async (): Promise<string> => {
@@ -33,7 +44,7 @@ const apiRequest = async <T>(
   }
 
   const token = await getIdToken();
-  const url = `${base}${path}`;
+  const url = buildApiUrl(base, path);
   if (import.meta.env.DEV) {
     const viaProxy = base.startsWith('/');
     console.info(
