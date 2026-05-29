@@ -9,6 +9,10 @@ frontend:
     build:
       commands:
         - npm run build
+    postBuild:
+      commands:
+        - chmod +x scripts/apply-amplify-custom-rules.sh
+        - bash scripts/apply-amplify-custom-rules.sh || echo "[amplify-rules] Sync omitido (aplica con npm run amplify:redirects)"
   artifacts:
     baseDirectory: dist
     files:
@@ -16,26 +20,6 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
-# Orden: de más específico a más general. Las reglas 200 de /workflow-api deben ir PRIMERO.
-redirects:
-  - source: /workflow-api/users/supervisors
-    target: https://vqad6x2236.execute-api.us-east-1.amazonaws.com/users/supervisors
-    status: '200'
-  - source: /workflow-api/users/supervisors/
-    target: https://vqad6x2236.execute-api.us-east-1.amazonaws.com/users/supervisors
-    status: '200'
-  - source: /workflow-api/users
-    target: https://vqad6x2236.execute-api.us-east-1.amazonaws.com/users
-    status: '200'
-  - source: /workflow-api/users/
-    target: https://vqad6x2236.execute-api.us-east-1.amazonaws.com/users
-    status: '200'
-  - source: /workflow-api/<*>
-    target: https://vqad6x2236.execute-api.us-east-1.amazonaws.com/<*>
-    status: '200'
-  - source: /<*>
-    target: /index.html
-    status: '404-200'
 
-# VITE_WORKFLOW_API_URL=/workflow-api
-# Si ves 301 → .../users/ : borra en consola reglas "añadir barra final" y vacía caché del navegador.
+# Rewrites: infra/amplify/custom-rules.json (no usar redirects aquí; Amplify Hosting no los lee del YAML).
+# Producción: VITE_WORKFLOW_API_URL=/workflow-api

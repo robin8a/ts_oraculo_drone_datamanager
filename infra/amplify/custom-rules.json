@@ -1,0 +1,32 @@
+[
+  {
+    "source": "/workflow-api/users/supervisors/",
+    "target": "https://vqad6x2236.execute-api.us-east-1.amazonaws.com/users/supervisors",
+    "status": "200"
+  },
+  {
+    "source": "/workflow-api/users/supervisors",
+    "target": "https://vqad6x2236.execute-api.us-east-1.amazonaws.com/users/supervisors",
+    "status": "200"
+  },
+  {
+    "source": "/workflow-api/users/",
+    "target": "https://vqad6x2236.execute-api.us-east-1.amazonaws.com/users",
+    "status": "200"
+  },
+  {
+    "source": "/workflow-api/users",
+    "target": "https://vqad6x2236.execute-api.us-east-1.amazonaws.com/users",
+    "status": "200"
+  },
+  {
+    "source": "/workflow-api/<*>",
+    "target": "https://vqad6x2236.execute-api.us-east-1.amazonaws.com/<*>",
+    "status": "200"
+  },
+  {
+    "source": "/<*>",
+    "target": "/index.html",
+    "status": "404-200"
+  }
+]

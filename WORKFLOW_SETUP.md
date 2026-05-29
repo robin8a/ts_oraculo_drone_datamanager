@@ -97,11 +97,11 @@ La función vive en la **consola AWS** (Lambda `datadroneuser` + API HTTP), no e
    VITE_WORKFLOW_API_PROXY_TARGET=https://TU-API.execute-api.us-east-1.amazonaws.com
    ```
    Reinicia `npm run dev`. El navegador llama a `localhost:5173` y Vite reenvía a API Gateway.
-6. En `.env` del frontend (producción o si CORS ya funciona):
+6. **Producción Amplify (recomendado):** `VITE_WORKFLOW_API_URL=/workflow-api` y rewrites en Hosting (ver sección Despliegue).
+7. **Alternativa:** URL directa de API Gateway solo si CORS está bien configurado:
    ```
    VITE_WORKFLOW_API_URL=https://xxxx.execute-api.us-east-1.amazonaws.com
    ```
-   Reinicia `npm run dev` tras cambiar el `.env`.
 
 ## Despliegue en Amplify Hosting
 
@@ -109,17 +109,27 @@ La función vive en la **consola AWS** (Lambda `datadroneuser` + API HTTP), no e
    - `npm ci`
    - `scripts/amplify-pull-for-build.sh` → genera `src/amplifyconfiguration.json` (Cognito/Identity Pool)
    - `npm run build` → carpeta `dist`
+   - `postBuild`: intenta aplicar `infra/amplify/custom-rules.json` (proxy + SPA)
 2. El backend Amplify de este proyecto usa entorno **`dev`** (`AmplifyAppId`: `d2yaf6u7gkp21`). Si despliegas otra rama con otro entorno, define `AMPLIFY_BACKEND_ENV` en la consola.
-3. En **Amplify Console → Environment variables** (rama que despliegas), define al menos:
+3. En **Amplify Console → Environment variables** (rama que despliegas):
    ```
-   VITE_WORKFLOW_API_URL=https://xxxx.execute-api.us-east-1.amazonaws.com
+   VITE_WORKFLOW_API_URL=/workflow-api
    ```
-   Sin barra final. **No** uses `/workflow-api` ni `VITE_WORKFLOW_API_PROXY_TARGET` en Amplify.
-4. Vuelve a desplegar tras cambiar variables (`VITE_*` se incrustan en el build).
-5. **Evitar CORS en producción:** en Amplify pon `VITE_WORKFLOW_API_URL=/workflow-api`. El `amplify.yml` del repo incluye un rewrite que reenvía `/workflow-api/*` a API Gateway (misma origen que la app).
-6. **Rutas SPA:** el mismo `amplify.yml` incluye `404-200` → `index.html` para que `/admin/users` no devuelva 404 al recargar.
-7. En API Gateway CORS (solo si usas URL directa `https://...execute-api...`): origen Amplify + localhost.
-8. En la Lambda, actualiza `APP_LOGIN_URL` a la URL pública de la app (no `localhost`).
+   Sin barra final. **No** uses `VITE_WORKFLOW_API_PROXY_TARGET` en Amplify (solo en `.env` local).
+4. **Rewrites (obligatorio una vez):** las reglas viven en `infra/amplify/custom-rules.json`. Aplícalas de una de estas formas:
+   - **CLI (recomendado):** con credenciales AWS (`amplify:UpdateApp`):
+     ```bash
+     npm run amplify:redirects
+     ```
+     En Windows: `.\scripts\apply-amplify-custom-rules.ps1`
+   - **Consola:** Hosting → Rewrites and redirects → Manage redirects → pegar el contenido de `infra/amplify/custom-rules.json` → Save.
+   - Tras un deploy, el `postBuild` puede aplicarlas si el rol de build tiene permiso `amplify:UpdateApp`.
+5. Orden de reglas: primero `/workflow-api/*` (200 → API Gateway), al final `/<*>` → `index.html` (404-200 SPA).
+6. Si cambias la URL de API Gateway, edita `target` en `infra/amplify/custom-rules.json` y vuelve a ejecutar `npm run amplify:redirects`.
+7. Vuelve a desplegar tras cambiar `VITE_*` (se incrustan en el build).
+8. Tras el primer arreglo, prueba `/admin/users` en **ventana de incógnito** (los 301 viejos quedan en caché del navegador).
+9. En API Gateway CORS (solo si usas URL directa en lugar de `/workflow-api`): origen Amplify + localhost.
+10. En la Lambda, actualiza `APP_LOGIN_URL` a la URL pública de la app (no `localhost`).
 
 Si el build falla en `amplify pull`, confirma que Hosting y el backend Amplify son la **misma app** en la consola y que el rol de build tiene permisos sobre el backend.
 
