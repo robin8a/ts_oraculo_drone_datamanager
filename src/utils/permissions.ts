@@ -22,6 +22,8 @@ export interface RolePermissions {
   copyMoveFiles: boolean;
   createFolders: boolean;
   manageUsers: boolean;
+  /** Crear / archivar proyectos en public/_projects. */
+  manageProjects: boolean;
   accessSettings: boolean;
 }
 
@@ -40,6 +42,7 @@ const DENIED: RolePermissions = {
   copyMoveFiles: false,
   createFolders: false,
   manageUsers: false,
+  manageProjects: false,
   accessSettings: false,
 };
 
@@ -64,6 +67,7 @@ export const getPermissionsForRole = (role: UserRole | null): RolePermissions =>
       copyMoveFiles: true,
       createFolders: true,
       manageUsers: true,
+      manageProjects: true,
       accessSettings: true,
     };
   }
@@ -84,6 +88,7 @@ export const getPermissionsForRole = (role: UserRole | null): RolePermissions =>
       copyMoveFiles: false,
       createFolders: false,
       manageUsers: false,
+      manageProjects: false,
       accessSettings: false,
     };
   }
@@ -104,6 +109,7 @@ export const getPermissionsForRole = (role: UserRole | null): RolePermissions =>
       copyMoveFiles: false,
       createFolders: true,
       manageUsers: false,
+      manageProjects: false,
       accessSettings: false,
     };
   }

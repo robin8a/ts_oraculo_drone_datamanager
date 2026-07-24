@@ -1,6 +1,4 @@
 {
-  "project_ids": [
-    "proyecto-demo-norte",
-    "proyecto-demo-sur"
-  ]
+  "project_ids": [],
+  "_comment": "Obsoleto: el catálogo vive en S3 public/_projects/*.json. Este archivo ya no se usa."
 }

@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ROLE_LABELS, USER_ROLES } from '../constants/roles';
@@ -8,14 +9,35 @@ import {
   usesStagingFileManager,
 } from '../utils/permissions';
 import { NoRoleBanner } from '../components/NoRoleBanner';
+import { useS3Connection } from '../hooks/useS3Connection';
+import { listProjects } from '../services/projectCatalogService';
 
 export function HomePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const role = user?.role;
+  const { s3Conn } = useS3Connection();
+  const [projectCount, setProjectCount] = useState<number | null>(null);
 
   const accessDenied = (location.state as { accessDenied?: string } | null)?.accessDenied;
+
+  const loadProjectCount = useCallback(async () => {
+    if (!s3Conn) {
+      setProjectCount(null);
+      return;
+    }
+    try {
+      const projects = await listProjects(s3Conn);
+      setProjectCount(projects.length);
+    } catch {
+      setProjectCount(null);
+    }
+  }, [s3Conn]);
+
+  useEffect(() => {
+    void loadProjectCount();
+  }, [loadProjectCount]);
 
   return (
     <div className="space-y-6">
@@ -131,8 +153,9 @@ export function HomePage() {
         <article className="brand-panel p-6">
           <p className="brand-kicker">Proyectos</p>
           <h2 className="mt-3 text-3xl font-semibold text-terra-deep">
-            {user?.project_ids.length || 0}
+            {projectCount === null ? '—' : projectCount}
           </h2>
+          <p className="mt-2 text-xs text-terra-deep/60">Catálogo en _projects/</p>
         </article>
         <article className="brand-panel p-6">
           <p className="brand-kicker">Flujo</p>

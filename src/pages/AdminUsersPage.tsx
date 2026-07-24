@@ -267,9 +267,8 @@ export function AdminUsersPage() {
           )}
           {form.role === USER_ROLES.ANALYST && (
             <p className="md:col-span-2 text-sm text-terra-deep/70 rounded-2xl border border-terra-moss/25 bg-terra-cream/50 px-4 py-3">
-              Los analistas tienen acceso a <strong>todos los proyectos</strong> listados en{' '}
-              <code className="text-xs">public/project_ids.json</code>. No hace falta asignarlos uno
-              a uno.
+              Los analistas ven <strong>todos los proyectos activos</strong> del catálogo en{' '}
+              <code className="text-xs">public/_projects/</code> (creados desde Proyectos).
             </p>
           )}
           <div className="md:col-span-2">

@@ -557,16 +557,23 @@ export function FileManagerPage() {
               <>
                 {' '}
                 Los archivos se guardan en{' '}
-                <code className="rounded bg-terra-cream px-1 py-0.5 text-xs">{STAGING_ROOT}/</code>{' '}
+                <code className="rounded bg-terra-cream px-1 py-0.5 text-xs">
+                  _projects/…/{STAGING_ROOT}/
+                </code>{' '}
                 y solo pasan a{' '}
-                <code className="rounded bg-terra-cream px-1 py-0.5 text-xs">{APPROVED_ROOT}/</code>{' '}
+                <code className="rounded bg-terra-cream px-1 py-0.5 text-xs">
+                  _projects/…/{APPROVED_ROOT}/
+                </code>{' '}
                 cuando tu supervisor aprueba el envío.
               </>
             ) : (
               <>
                 {' '}
                 Solo se muestra documentación ya avalada, bajo{' '}
-                <code className="rounded bg-terra-cream px-1 py-0.5 text-xs">{APPROVED_ROOT}/</code>.
+                <code className="rounded bg-terra-cream px-1 py-0.5 text-xs">
+                  _projects/…/{APPROVED_ROOT}/
+                </code>
+                .
                 {permissions.manageApprovedFiles
                   ? ' Puedes gestionar archivos (administrador).'
                   : ' Modo consulta: descargar y previsualizar (supervisor).'}

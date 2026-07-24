@@ -2,8 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '../types/user';
 import { authDebugLog } from '../utils/authDebug';
-import { loadPublicProjectIdsJson } from '../utils/projectIdsFromJson';
-import { CUSTOM_ROLE_ATTRIBUTE, USER_ROLES } from '../constants/roles';
+import { CUSTOM_ROLE_ATTRIBUTE } from '../constants/roles';
 import {
   fetchCognitoGroupsFromSession,
   fetchCustomRoleFromToken,
@@ -37,22 +36,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const parseProjectIdsFromAttrs = (attrs: Record<string, string | undefined>): string[] => {
-  const value = attrs['custom:project_ids'];
-  if (!value) {
-    return [];
-  }
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (!Array.isArray(parsed) || !parsed.every((id) => typeof id === 'string')) {
-      return [];
-    }
-    return parsed as string[];
-  } catch {
-    return [];
-  }
-};
-
 const buildUserFromCognito = async (): Promise<User | null> => {
   try {
     const { username } = await getCurrentUser();
@@ -66,20 +49,6 @@ const buildUserFromCognito = async (): Promise<User | null> => {
       customRoleFromToken
     );
 
-    let project_ids = parseProjectIdsFromAttrs(record);
-    /** Analistas: siempre todos los proyectos del catálogo (`public/project_ids.json`). */
-    if (role === USER_ROLES.ANALYST) {
-      project_ids = await loadPublicProjectIdsJson();
-    } else if (project_ids.length === 0) {
-      project_ids = await loadPublicProjectIdsJson();
-    }
-    if (project_ids.length > 0) {
-      authDebugLog('project_ids resueltos', {
-        rol: role,
-        cantidad: project_ids.length,
-      });
-    }
-
     const supervisorRaw = record['custom:supervisor_id'];
     const supervisor_id =
       supervisorRaw && supervisorRaw.trim() !== '' ? supervisorRaw.trim() : null;
@@ -87,7 +56,8 @@ const buildUserFromCognito = async (): Promise<User | null> => {
     return {
       username,
       email: record.email ?? null,
-      project_ids,
+      /** Catálogo de proyectos: S3 `public/_projects/` (ver ProjectsPage). */
+      project_ids: [],
       role,
       supervisor_id,
       groups,

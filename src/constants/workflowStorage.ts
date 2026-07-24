@@ -6,11 +6,12 @@ export const WORKFLOW_META_PREFIX = pathUnderStorageRoot('_workflow');
 export const SUBMISSIONS_META_PREFIX = `${WORKFLOW_META_PREFIX}/submissions`;
 export const NOTIFICATIONS_META_PREFIX = `${WORKFLOW_META_PREFIX}/notifications`;
 
-/** Zona temporal: solo analistas suben aquí (ej. public/staging). */
-export const STAGING_ROOT = pathUnderStorageRoot('staging');
+/** Catálogo de proyectos: public/_projects/{PROJECT_ID}/ */
+export const PROJECTS_META_PREFIX = pathUnderStorageRoot('_projects');
 
-/** Zona definitiva tras aval del supervisor (ej. public/approved). */
-export const APPROVED_ROOT = pathUnderStorageRoot('approved');
+/** Carpetas internas de cada proyecto (como en SAGAMI). */
+export const PROJECT_APPROVED_FOLDER = '_approved';
+export const PROJECT_STAGING_FOLDER = '_staging';
 
 export const SUBMISSION_STATUS = {
   DRAFT: 'DRAFT',
@@ -21,13 +22,30 @@ export const SUBMISSION_STATUS = {
 
 export type SubmissionStatus = (typeof SUBMISSION_STATUS)[keyof typeof SUBMISSION_STATUS];
 
+const projectsRoot = (): string =>
+  PROJECTS_META_PREFIX.endsWith('/') ? PROJECTS_META_PREFIX : `${PROJECTS_META_PREFIX}/`;
+
+/** `public/_projects/{PROJECT_ID}/` — id en mayúsculas en S3. */
+export const projectFolderPrefix = (projectId: string): string =>
+  `${projectsRoot()}${projectId}/`;
+
+/** Documentación avalada: `public/_projects/{PROJECT_ID}/_approved/` */
+export const approvedPrefixForProject = (projectId: string): string =>
+  `${projectFolderPrefix(projectId)}${PROJECT_APPROVED_FOLDER}/`;
+
+/** Zona temporal del proyecto: `public/_projects/{PROJECT_ID}/_staging/` */
+export const stagingRootForProject = (projectId: string): string =>
+  `${projectFolderPrefix(projectId)}${PROJECT_STAGING_FOLDER}/`;
+
 export const stagingPrefixForSubmission = (
   projectId: string,
   analystUsername: string,
   submissionId: string
-): string => `${STAGING_ROOT}/${projectId}/${analystUsername}/${submissionId}/`;
+): string => `${stagingRootForProject(projectId)}${analystUsername}/${submissionId}/`;
 
-export const approvedPrefixForProject = (projectId: string): string => `${APPROVED_ROOT}/${projectId}/`;
+/** Etiquetas de UI (ruta relativa al proyecto). */
+export const STAGING_ROOT = PROJECT_STAGING_FOLDER;
+export const APPROVED_ROOT = PROJECT_APPROVED_FOLDER;
 
 export const submissionMetaKey = (submissionId: string): string =>
   `${SUBMISSIONS_META_PREFIX}/${submissionId}.json`;

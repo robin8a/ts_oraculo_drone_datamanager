@@ -232,9 +232,10 @@ export function SupervisorInboxPage() {
         <p className="brand-kicker">Supervisor</p>
         <h1 className="brand-page-title mt-3">Bandeja de revisión</h1>
         <p className="mt-3 text-sm text-terra-deep/75">
-          Revisa los archivos que subió cada analista en staging antes de aprobar o rechazar. Al
-          aprobar, pasan a la zona definitiva{' '}
-          <code className="text-xs bg-terra-cream px-1 rounded">approved</code>.
+          Revisa los archivos que subió cada analista en{' '}
+          <code className="text-xs bg-terra-cream px-1 rounded">_staging</code> antes de aprobar o
+          rechazar. Al aprobar, pasan a{' '}
+          <code className="text-xs bg-terra-cream px-1 rounded">_approved</code>.
         </p>
         <p className="mt-2 text-sm font-medium text-terra-primary">
           Pendientes: {pending.length} · Notificaciones sin leer: {unreadCount}

@@ -1,4 +1,4 @@
-import { APPROVED_ROOT } from './workflowStorage';
+import { approvedPrefixForProject } from './workflowStorage';
 import { getS3RootPrefix } from './storageRoot';
 
 export { getS3RootPrefix } from './storageRoot';
@@ -9,9 +9,9 @@ export const projectRootPrefixInS3 = (projectId: string): string => {
   return root ? `${root}/${projectId}/` : `${projectId}/`;
 };
 
-/** `{root}/approved/{projectId}/` — documentación avalada */
+/** `public/_projects/{PROJECT_ID}/_approved/` — documentación avalada */
 export const approvedProjectRootPrefixInS3 = (projectId: string): string =>
-  `${APPROVED_ROOT}/${projectId}/`;
+  approvedPrefixForProject(projectId);
 
 export const listPrefixForApprovedProjectPath = (
   projectId: string,

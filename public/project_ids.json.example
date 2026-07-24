@@ -1,6 +1,4 @@
 {
-  "project_ids": [
-    "proyecto-demo-norte",
-    "proyecto-demo-sur"
-  ]
+  "project_ids": [],
+  "_comment": "Obsoleto: crear proyectos desde la app (public/_projects/ en S3)."
 }
